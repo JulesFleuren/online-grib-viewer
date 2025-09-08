@@ -1,0 +1,18 @@
+[package]
+name = "online-grib-viewer"
+version = "0.1.0"
+authors = ["Jules Fleuren 95241984+JulesFleuren@users.noreply.github.com"]
+description = "WASM functions for online grib viewer"
+license = "MIT"
+repository = "https://github.com/julesfleuren/online-grib-viewer"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wasm-bindgen = "0.2"
+console_log = "1.0.0"
+js-sys = "0.3"
+grib = { version = "0.11.2", features = ["time-calculation"] }
+console_error_panic_hook = "0.1.7"
