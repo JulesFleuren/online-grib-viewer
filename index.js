@@ -1,9 +1,9 @@
-import init, { get_available_parameters, get_vector_field, get_available_timestamps, get_grib_index, get_scalar_field, get_grid_shape } from './pkg/grib_reader_wasm.js';
+import init, { get_available_parameters, get_vector_field, get_available_timestamps, get_scalar_field, get_grid_shape } from './pkg/online_grib_viewer.js';
 import { generateHeatMapCanvas, generateHeatMapSvg, generateWindBarbSvg } from './map-overlays.js';
 
 // certain parameter pairs are known to be vector fields
 const PARAMETER_PAIRS = {
-  'current': { u: { discipline: 10, category: 1, parameter: 2 }, v: { discipline: 10, category: 1, parameter: 3 } },
+  'current': { u: "grib2_10_1_2", v: "grib2_10_1_3" },
 };
 
 let map;
@@ -28,11 +28,9 @@ function showParameterSelect(params) {
   select.innerHTML = '';
   params.forEach(p => {
     const name = p.name;
-    const discipline = p.discipline;
-    const category = p.category;
-    const parameter = p.parameter;
+    const key = p.key;
     const option = document.createElement('option');
-    option.value = `${discipline},${category},${parameter}`;
+    option.value = key;
     option.textContent = name;
     select.appendChild(option);
   });
@@ -40,11 +38,11 @@ function showParameterSelect(params) {
   // Check if any parameter pairs are available for vector field display and add an option if so
   Object.keys(PARAMETER_PAIRS).forEach(pairName => {
     const pair = PARAMETER_PAIRS[pairName];
-    const hasU = params.some(p => p.discipline === pair.u.discipline && p.category === pair.u.category && p.parameter === pair.u.parameter);
-    const hasV = params.some(p => p.discipline === pair.v.discipline && p.category === pair.v.category && p.parameter === pair.v.parameter);
+    const hasU = params.some(p => p.key === pair.u);
+    const hasV = params.some(p => p.key === pair.v);
     if (hasU && hasV) {
       const option = document.createElement('option');
-      option.value = `vector,${pair.u.discipline},${pair.u.category},${pair.u.parameter},${pair.v.discipline},${pair.v.category},${pair.v.parameter}`;
+      option.value = `vector:${pair.u},${pair.v}`;
       option.textContent = `${pairName} (vector field)`;
       select.appendChild(option);
     }
@@ -98,8 +96,6 @@ function displayVectorField(nx, ny, lat, lon, u, v) {
     [bounds[1][0] + cellSizeLat / 2, bounds[1][1] + cellSizeLon / 2]
   ];
 
-  const uArray = Array.from(u);
-
   // Also display a heatmap of the norm of the vector field
   const normValues = u.map((val, idx) => {
     if (isNaN(val) || isNaN(v[idx])) return NaN;
@@ -113,6 +109,10 @@ function displayVectorField(nx, ny, lat, lon, u, v) {
   const svg = generateWindBarbSvg(nx, ny, lat, lon, u, v, 0.1);
   
   arrowLayers.push(L.svgOverlay(svg.node(), adjustedBounds).addTo(map));
+
+  markAllPoints(lat, lon);
+
+  map.fitBounds(bounds);
 }
 
 function displayHeatmap(nx, ny, lat, lon, values) {
@@ -137,31 +137,28 @@ function displayHeatmap(nx, ny, lat, lon, values) {
 
 function displayParameter(time) {
   const paramSelect = document.getElementById('parameterSelect');
-  const selectedValue = paramSelect.value;
-  if (selectedValue.startsWith('vector')) {
-    const [_, disciplineU, categoryU, parameterU, disciplineV, categoryV, parameterV] = selectedValue.split(',').map(Number);
-    const u_index = get_grib_index(gribBytes, disciplineU, categoryU, parameterU, BigInt(time));
-    const v_index = get_grib_index(gribBytes, disciplineV, categoryV, parameterV, BigInt(time));
-    if (u_index && v_index) {
-      const data = get_vector_field(gribBytes, u_index.index, v_index.index, u_index.subindex, v_index.subindex);
-      const shape = get_grid_shape(gribBytes, u_index.index, u_index.subindex);
-      displayVectorField(shape.nx, shape.ny, data.lat, data.lon, data.u, data.v);
+  selectedParameter = paramSelect.value;
+  if (selectedParameter.startsWith('vector')) {
+    // Vector field
+    const [u_key, v_key] = selectedParameter.split(":")[1].split(',');
+    if (u_key && v_key) {
+      const u_data = get_scalar_field(gribBytes, u_key, BigInt(time));
+      const v_data = get_scalar_field(gribBytes, v_key, BigInt(time));
+      const shape = get_grid_shape(gribBytes, u_key);
+      displayVectorField(shape.nx, shape.ny, u_data.lat, u_data.lon, u_data.values, v_data.values);
 
-      document.getElementById('output').textContent = `Displaying vector field with U at index ${u_index.index}, subindex ${u_index.subindex} and V at index ${v_index.index}, subindex ${v_index.subindex}`;
+      document.getElementById('output').textContent = `Displaying vector field with U key: ${u_key} and V key: ${v_key}`;
     }
     return;
   } else {
       // Scalar field
-      const [discipline, category, parameter] = selectedValue.split(',');
-      const index = get_grib_index(gribBytes, discipline, category, parameter, BigInt(time));
-
-      if (index) {
-        // If we found the index, we can display the heatmap
-        const data = get_scalar_field(gribBytes, index.index, index.subindex);
-        const shape = get_grid_shape(gribBytes, index.index, index.subindex);
+      const key = selectedParameter;
+      if (key) {
+        const data = get_scalar_field(gribBytes, key, BigInt(time));
+        const shape = get_grid_shape(gribBytes, key);
         displayHeatmap(shape.nx, shape.ny, data.lat, data.lon, data.values);
 
-        document.getElementById('output').textContent = `Displaying parameter at index ${index.index}, subindex ${index.subindex}`;  
+        document.getElementById('output').textContent = `Displaying parameter at key ${key}`;  
       }
   }
 }
@@ -178,9 +175,7 @@ init().then(() => {
 
     parameters = get_available_parameters(gribBytes).map(p => ({
       name: p.name,
-      discipline: p.discipline,
-      category: p.category,
-      parameter: p.parameter
+      key: p.key,
     }));
 
     console.log('Available parameters:', parameters);
@@ -192,20 +187,25 @@ init().then(() => {
   document.getElementById('parameterSelect').addEventListener('change', (e) => {
     selectedParameter = e.target.value;
     // check if the selected value is a vector field
-    if (e.target.value.startsWith('vector')) {
-      const [disciplineU, categoryU, parameterU, disciplineV, categoryV, parameterV] = e.target.value.split(',').slice(1).map(Number);
-      var timesU = get_available_timestamps(gribBytes, disciplineU, categoryU, parameterU);
-      var timesV = get_available_timestamps(gribBytes, disciplineV, categoryV, parameterV);
-      // find intersection of timesU and timesV
-      var times = timesU.filter(t => timesV.includes(t));
-      showTimeSelect(times);
+    if (selectedParameter.startsWith('vector')) {
+      // Vector field
+      const [u_key, v_key] = selectedParameter.split(":")[1].split(',');
+      if (u_key && v_key) {
+        var timesU = get_available_timestamps(gribBytes, u_key);
+        var timesV = get_available_timestamps(gribBytes, v_key);
+        // find intersection of timesU and timesV
+        var times = timesU.filter(t => timesV.includes(t));
+        showTimeSelect(times);
+      }
+      return;
     } else {
-      // otherwise, it's a scalar field
-      const [discipline, category, parameter] = e.target.value.split(',');
-      var times = get_available_timestamps(gribBytes, Number(discipline), Number(category), parameter);
-      showTimeSelect(times);
+        // Scalar field
+        const key = selectedParameter;
+        if (key) {
+          var timesU = get_available_timestamps(gribBytes, key);
+          showTimeSelect(timesU);
+        }
     }
-
   });
 
   document.getElementById('timestampSelect').addEventListener('change', (e) => {

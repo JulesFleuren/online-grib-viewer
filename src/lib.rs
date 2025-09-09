@@ -77,19 +77,24 @@ pub fn get_available_parameters(bytes: &[u8]) -> Vec<JsValue> {
     for (parameter_name, (discipline_number, category_number, parameter_number)) in parameters {
         let parameter = js_sys::Object::new();
         js_sys::Reflect::set(&parameter, &JsValue::from_str("name"), &JsValue::from(parameter_name.to_string())).expect("failed to set name");
-        js_sys::Reflect::set(&parameter, &JsValue::from_str("discipline"), &JsValue::from(discipline_number)).expect("failed to set discipline");
-        js_sys::Reflect::set(&parameter, &JsValue::from_str("category"), &JsValue::from(category_number)).expect("failed to set category");
-        js_sys::Reflect::set(&parameter, &JsValue::from_str("parameter"), &JsValue::from(parameter_number)).expect("failed to set parameter");
+        js_sys::Reflect::set(&parameter, &JsValue::from_str("key"), &JsValue::from(format!("grib2_{}_{}_{}", discipline_number, category_number, parameter_number))).expect("failed to set key");
         js_parameters.push(JsValue::from(parameter));
     }
     js_parameters
 }
 
 #[wasm_bindgen]
-pub fn get_available_timestamps(bytes: &[u8], discipline: u8, category: u8, parameter: u8) -> Vec<JsValue> {
+pub fn get_available_timestamps(bytes: &[u8], key: &str) -> Vec<JsValue> {
     let grib2 = grib::from_bytes(bytes).unwrap();
     let mut times: HashSet<i64> = HashSet::new();
     for (_, message) in grib2.iter() {
+        let parts: Vec<&str> = key.split('_').collect();
+        if parts.len() != 4 || parts[0] != "grib2" {
+            continue;
+        }
+        let discipline: u8 = parts[1].parse().expect("invalid discipline");
+        let category: u8 = parts[2].parse().expect("invalid category");
+        let parameter: u8 = parts[3].parse().expect("invalid parameter");
         let d = message.indicator().discipline;
         let c = message.prod_def().parameter_category().expect("missing parameter category");
         let p = message.prod_def().parameter_number().expect("missing parameter number");
@@ -111,10 +116,8 @@ pub fn get_available_timestamps(bytes: &[u8], discipline: u8, category: u8, para
     js_times
 }
 
-#[wasm_bindgen]
-pub fn get_grib_index(bytes: &[u8], discipline: u8, category: u8, parameter: u8, time: i64) -> JsValue {
+pub fn find_grib_index(bytes: &[u8], discipline: u8, category: u8, parameter: u8, time: i64) -> Result<(usize, usize), String> {
     let grib2 = grib::from_bytes(bytes).unwrap();
-    let result = js_sys::Object::new();
     for ((index, subindex), message) in grib2.iter() {
         let d = message.indicator().discipline;
         let c = message.prod_def().parameter_category().expect("missing parameter category");
@@ -122,16 +125,23 @@ pub fn get_grib_index(bytes: &[u8], discipline: u8, category: u8, parameter: u8,
         let temporal_info = grib::TemporalInfo::from(&message.temporal_raw_info());
         let t = temporal_info.forecast_time_target.unwrap().timestamp();
         if d == discipline && c == category && p == parameter && t == time {
-            js_sys::Reflect::set(&result, &JsValue::from_str("index"), &JsValue::from(index)).unwrap();
-            js_sys::Reflect::set(&result, &JsValue::from_str("subindex"), &JsValue::from(subindex)).unwrap();
-            return JsValue::from(result);
+            return Ok((index, subindex));
         }
     }
-    JsValue::NULL
+    Err("GRIB index not found".to_string())
 }
 
 #[wasm_bindgen]
-pub fn get_scalar_field(bytes: &[u8], index: usize, subindex: usize) -> JsValue {
+pub fn get_scalar_field(bytes: &[u8], key: &str, time: i64) -> Result<JsValue, JsValue> {
+    let parts: Vec<&str> = key.split('_').collect();
+    if parts.len() != 4 || parts[0] != "grib2" {
+        return Err(JsValue::from("invalid key format"));
+    }
+    let discipline: u8 = parts[1].parse().expect("invalid discipline");
+    let category: u8 = parts[2].parse().expect("invalid category");
+    let parameter: u8 = parts[3].parse().expect("invalid parameter");
+
+    let (index, subindex) = find_grib_index(bytes, discipline, category, parameter, time)?;
     let (lat, lon, values) = decode_layer(bytes, (index, subindex)).expect("failed to decode layer");
     // Convert Rust Vec<f32> to JS Float32Array
     let lat = Float32Array::from(lat.as_slice());
@@ -144,7 +154,7 @@ pub fn get_scalar_field(bytes: &[u8], index: usize, subindex: usize) -> JsValue 
     js_sys::Reflect::set(&result, &JsValue::from_str("lon"), &lon).expect("failed to set lon");
     js_sys::Reflect::set(&result, &JsValue::from_str("values"), &values).expect("failed to set values");
 
-    JsValue::from(result)
+    Ok(JsValue::from(result))
 }
 
 #[wasm_bindgen]
