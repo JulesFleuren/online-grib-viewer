@@ -1,4 +1,4 @@
-import init, { get_available_parameters, get_vector_field, get_available_timestamps, get_scalar_field, get_grid_shape } from './pkg/online_grib_viewer.js';
+import init, { get_available_parameters, get_vector_field, get_available_timestamps, get_scalar_field, get_grid_shape, query_grib_message_at_point } from './pkg/online_grib_viewer.js';
 import { generateHeatMapCanvas, generateHeatMapSvg, generateWindBarbSvg } from './map-overlays.js';
 
 // certain parameter pairs are known to be vector fields
@@ -211,5 +211,51 @@ init().then(() => {
   document.getElementById('timestampSelect').addEventListener('change', (e) => {
     selectedTime = Number(e.target.value);
     displayParameter(selectedTime);
+  });
+
+  map.on('click', function(e) {
+    const lat = e.latlng.lat;
+    const lng = e.latlng.lng;
+
+    if (!gribBytes || !selectedParameter || selectedTime === null) {
+      return;
+    }
+
+    if (selectedParameter.startsWith('vector')) {
+      // Vector field
+      const [u_key, v_key] = selectedParameter.split(":")[1].split(',');
+      if (u_key && v_key) {
+        const u_data = query_grib_message_at_point(gribBytes, u_key, BigInt(selectedTime), lat, lng);
+        const v_data = query_grib_message_at_point(gribBytes, v_key, BigInt(selectedTime), lat, lng);
+
+        // show popup with queried data
+        L.popup()
+          .setLatLng({lat: u_data.lat, lng: u_data.lon})
+          .setContent("Closest grid point:<br>" +
+                      `Lat: ${u_data.lat.toFixed(5)}<br>Lng: ${u_data.lon.toFixed(5)}<br>` +
+                      `U: ${u_data.value.toFixed(2)}<br>` +
+                      `V: ${v_data.value.toFixed(2)}<br>` +
+                      `Speed: ${Math.sqrt(u_data.value**2 + v_data.value**2).toFixed(2)}<br>` +
+                      `Direction: ${(Math.atan2(v_data.value, u_data.value) * 180 / Math.PI).toFixed(2)}°`
+                    )
+          .openOn(map);
+  
+        // TODO: wind direction is inverted
+        return;
+      }
+    } else {
+      // Scalar field
+      const key = selectedParameter;
+      const data = query_grib_message_at_point(gribBytes, key, BigInt(selectedTime), lat, lng);
+
+      // show popup with queried data
+      L.popup()
+        .setLatLng({lat: data.lat, lng: data.lon})
+        .setContent("Closest grid point:<br>" +
+                    `Lat: ${data.lat.toFixed(5)}<br>Lng: ${data.lon.toFixed(5)}<br>` +
+                    `${key}: ${data.value.toFixed(2)}<br>`
+                  )
+        .openOn(map);
+    }
   });
 });

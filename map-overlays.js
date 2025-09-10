@@ -102,7 +102,7 @@ function generateWindBarbSvg(nx, ny, lat, lon, u, v, scale=1) {
 
   for (const point of data) {
     // Get SVG string for wind barb
-    const barbSvgString = getWindBarb(10*point.magnitude);
+    const barbSvgString = getWindBarb(point.magnitude);
 
     // Parse the SVG string to a DOM element
     const parser = new DOMParser();
@@ -129,6 +129,7 @@ function generateWindBarbSvg(nx, ny, lat, lon, u, v, scale=1) {
   // TODO: the barbs are not centered in all cells due to projection issues
   return svg;
 }
+
 
 function valueToColor(value) {
   const color = {r: value*255, g: (1-value)*255, b: 0};

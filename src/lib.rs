@@ -116,6 +116,29 @@ pub fn get_available_timestamps(bytes: &[u8], key: &str) -> Vec<JsValue> {
     js_times
 }
 
+#[wasm_bindgen]
+pub fn query_grib_message_at_point(bytes: &[u8], key: &str, time: i64, query_lat: f32, query_lon: f32) -> Result<JsValue, JsValue> {
+    let parts: Vec<&str> = key.split('_').collect();
+    if parts.len() != 4 || parts[0] != "grib2" {
+        return Err(JsValue::from("invalid key format"));
+    }
+    let discipline: u8 = parts[1].parse().expect("invalid discipline");
+    let category: u8 = parts[2].parse().expect("invalid category");
+    let parameter: u8 = parts[3].parse().expect("invalid parameter");
+
+    let (index, subindex) = find_grib_index(bytes, discipline, category, parameter, time)
+        .map_err(|e| JsValue::from(e))?;
+    let (lat, lon, values) = decode_layer(bytes, (index, subindex)).expect("failed to decode layer");
+
+    let nearest_point_index = find_closest_point_in_grid(&lat, &lon, query_lat, query_lon);
+
+    let return_value = js_sys::Object::new();
+    js_sys::Reflect::set(&return_value, &JsValue::from_str("lat"), &JsValue::from(lat[nearest_point_index])).expect("failed to set lat");
+    js_sys::Reflect::set(&return_value, &JsValue::from_str("lon"), &JsValue::from(lon[nearest_point_index])).expect("failed to set lon");
+    js_sys::Reflect::set(&return_value, &JsValue::from_str("value"), &JsValue::from(values[nearest_point_index])).expect("failed to set value");
+    Ok(JsValue::from(return_value))
+}
+
 pub fn find_grib_index(bytes: &[u8], discipline: u8, category: u8, parameter: u8, time: i64) -> Result<(usize, usize), String> {
     let grib2 = grib::from_bytes(bytes).unwrap();
     for ((index, subindex), message) in grib2.iter() {
@@ -178,19 +201,20 @@ pub fn get_vector_field(bytes: &[u8], u_index: usize, v_index: usize, u_subindex
     JsValue::from(result)
 }
 
-fn find_index_of_closest_point_in_grid(lat: &Vec<f32>, lon: &Vec<f32>, query_lat: f32, query_lon: f32) -> usize {
-    let mut nearest_point_index = 0;
-    let mut nearest_distance = f32::MAX;
+fn find_closest_point_in_grid(lat: &Vec<f32>, lon: &Vec<f32>, query_lat: f32, query_lon: f32) -> usize {
+    let mut closest_point_index = 0;
+    let mut closest_distance = f32::MAX;
     for (i, (lat, lon)) in lat.iter().zip(lon.iter()).enumerate() {
         // Calculate the distance to the query point
-        let distance = ((lat - query_lat).powi(2) + (lon - query_lon).powi(2)).sqrt();
-        // Update the nearest point if this one is closer
-        if distance < nearest_distance {
-            nearest_distance = distance;
-            nearest_point_index = i;
+
+        let distance = haversine_distance(*lat, *lon, query_lat, query_lon);
+        // Update the closest point if this one is closer
+        if distance < closest_distance {
+            closest_distance = distance;
+            closest_point_index = i;
         }
     }
-    nearest_point_index
+    closest_point_index
 }
 
 fn decode_layer(byte_string: &[u8], message_index: (usize, usize)) -> Result<(Vec<f32>, Vec<f32>, Vec<f32>), Box<dyn Error>>
@@ -224,4 +248,13 @@ fn decode_layer(byte_string: &[u8], message_index: (usize, usize)) -> Result<(Ve
 
 
     Ok((lats, lons, values))
+}
+
+// Distance (meters) between two points (latitude and longitude in degrees)
+fn haversine_distance(lat1: f32, lon1: f32, lat2: f32, lon2: f32) -> f32 {
+    const EARTH_RADIUS: f32 = 6371008.7714;
+
+    let a = ((lat2 - lat1) / 2.0).to_radians().sin().powi(2)
+        + lat1.to_radians().cos() * lat2.to_radians().cos() * ((lon2 - lon1) / 2.0).to_radians().sin().powi(2);
+    2.0 * EARTH_RADIUS * a.sqrt().asin()
 }
