@@ -165,7 +165,9 @@ function displayParameter(time) {
 
 init().then(() => {
   map = L.map('map').setView([0, 0], 2);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  }).addTo(map);
 
   document.getElementById('fileInput').addEventListener('change', async (e) => {
     const file = e.target.files[0];
