@@ -9,10 +9,12 @@ const PARAMETER_PAIRS = {
 let map;
 let heatLayer;
 let arrowLayers = [];
+let arrowZoomLayers = {};
 let gribBytes = null;
 let parameters = [];
 let selectedParameter = null;
 let selectedTime = null;
+let adjustedBounds = null;
 
 function clearMap() {
   if (heatLayer) {
@@ -91,13 +93,15 @@ function displayVectorField(nx, ny, lat, lon, u, v) {
   const cellSizeLat = (Math.max(...lat) - Math.min(...lat)) / ny;
   const cellSizeLon = (Math.max(...lon) - Math.min(...lon)) / nx;
 
-  const adjustedBounds = [
+  adjustedBounds = [
     [bounds[0][0] - cellSizeLat / 2, bounds[0][1] - cellSizeLon / 2],
     [bounds[1][0] + cellSizeLat / 2, bounds[1][1] + cellSizeLon / 2]
   ];
 
   map.fitBounds(adjustedBounds);
 
+  // TODO: max zoom level is now the same formula as in overlay.rs, but this is not very pretty
+  const maxZoomLevel = 5 - Math.floor(Math.log2(cellSizeLon));
   const zoomLevel = map.getZoom();
 
   // Also display a heatmap of the norm of the vector field
@@ -110,10 +114,21 @@ function displayVectorField(nx, ny, lat, lon, u, v) {
   heatLayer = L.svgOverlay(heatmapSvg.node(), adjustedBounds, {opacity: 0.6}).addTo(map);
 
   // Now display the wind barbs 
-  let svg = generateWindBarbSvg(nx, ny, cellSizeLat, cellSizeLon, u, v, 20);
+  let svg = generateWindBarbSvg(nx, ny, cellSizeLat, cellSizeLon, u, v, BigInt(zoomLevel));
   arrowLayers.push(L.svgOverlay(svg, adjustedBounds).addTo(map));
+  
+  // build a cache of layers at different zoom levels
+  arrowZoomLayers = {};
+  arrowZoomLayers[zoomLevel] = svg;
 
+
+  for (let zl = zoomLevel + 1; zl <= maxZoomLevel; zl++) {
+    let svg = generateWindBarbSvg(nx, ny, cellSizeLat, cellSizeLon, u, v, BigInt(zl));
+    arrowZoomLayers[zl] = svg;
+  }
   // markAllPoints(lat, lon);
+
+  console.log(arrowZoomLayers);
 
 }
 
@@ -125,7 +140,7 @@ function displayHeatmap(nx, ny, lat, lon, values) {
   const cellSizeLat = (Math.max(...lat) - Math.min(...lat)) / ny;
   const cellSizeLon = (Math.max(...lon) - Math.min(...lon)) / nx;
 
-  const adjustedBounds = [
+  adjustedBounds = [
     [bounds[0][0] - cellSizeLat / 2, bounds[0][1] - cellSizeLon / 2],
     [bounds[1][0] + cellSizeLat / 2, bounds[1][1] + cellSizeLon / 2]
   ];
@@ -162,6 +177,29 @@ function displayParameter(time) {
 
         document.getElementById('output').textContent = `Displaying parameter at key ${key}`;  
       }
+  }
+}
+
+  // Function to update the zoom level display
+function updateZoomLevel() {
+  const zoomLevelDiv = document.getElementById('zoom-level');
+  zoomLevelDiv.textContent = `Zoom Level: ${map.getZoom()}`;
+
+  // If arrow layers exist, update them based on zoom level
+  if (arrowLayers.length > 0) {
+    const maxZoom = Math.max(...Object.keys(arrowZoomLayers).map(zl => Number(zl)));
+    const minZoom = Math.min(...Object.keys(arrowZoomLayers).map(zl => Number(zl)));
+    const currentZoom = map.getZoom();
+    let targetZoom = Math.min(Math.max(currentZoom, minZoom), maxZoom);
+
+    // Remove existing arrow layers
+    arrowLayers.forEach(layer => map.removeLayer(layer));
+    arrowLayers = [];
+
+    // Add the appropriate layer for the current zoom level
+    if (arrowZoomLayers[targetZoom]) {
+      arrowLayers.push(L.svgOverlay(arrowZoomLayers[targetZoom], adjustedBounds).addTo(map));
+    }
   }
 }
 
@@ -262,12 +300,6 @@ init().then(() => {
         .openOn(map);
     }
   });
-
-  // Function to update the zoom level display
-  function updateZoomLevel() {
-    const zoomLevelDiv = document.getElementById('zoom-level');
-    zoomLevelDiv.textContent = `Zoom Level: ${map.getZoom()}`;
-  }
 
   // Initial update
   updateZoomLevel();
