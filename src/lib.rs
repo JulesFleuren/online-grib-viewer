@@ -1,3 +1,4 @@
+use console_log::log;
 use wasm_bindgen::prelude::*;
 use console_error_panic_hook;
 use grib::codetables::{Lookup, CodeTable4_2};
@@ -5,9 +6,13 @@ use js_sys::{Float32Array};
 use std::{collections::HashMap, error::Error};
 use std::collections::HashSet;
 
+pub mod overlays;
+pub mod windbarbs;
+
 #[wasm_bindgen(start)]
 pub fn init() {
     console_error_panic_hook::set_once();
+    console_log::init_with_level(log::Level::Debug).expect("failed to initialize logging"); 
 }
 
 #[wasm_bindgen]

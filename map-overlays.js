@@ -1,4 +1,5 @@
 import { getWindBarb } from './svg-wind-barbs/js/GetWindBarb.js';
+import { generate_wind_barbs_svg_overlay } from './pkg/online_grib_viewer.js';
 
 function generateHeatMapCanvas(nx, ny, values) {
   const canvas = document.createElement('canvas');
@@ -77,54 +78,14 @@ function generateHeatMapSvg(nx, ny, lat, lon, values) {
   return svg;
 }
 
-function generateWindBarbSvg(nx, ny, lat, lon, u, v, scale=1) {
-  const svg = d3.create("svg");
-  const cellSize = 250;
-
-  const data = [];
-  for (let i = 0; i < ny; i++) {
-    for (let j = 0; j < nx; j++) {
-      const idx = i * nx + j;
-      if (isNaN(u[idx]) || isNaN(v[idx])) continue;
-      data.push({
-        x: j,
-        y: ny - i - 1,
-        magnitude: Math.sqrt(u[idx]**2 + v[idx]**2),
-        direction: Math.atan2(v[idx], u[idx])
-      });
-    }
-  }
-
-  // add style information to the SVG
-  svg.append("style")
-    .attr("type", "text/css")
-    .text(`.svg-wb{fill:#1A232D;stroke:#1A232D;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:10;}`);
-
-  for (const point of data) {
-    // Get SVG string for wind barb
-    const barbSvgString = getWindBarb(point.magnitude);
-
-    // Parse the SVG string to a DOM element
-    const parser = new DOMParser();
-    const barbDoc = parser.parseFromString(barbSvgString, "image/svg+xml");
-    const barbSvg = barbDoc.documentElement;
-
-
-    // Get all paths from the wind barb SVG
-    const paths = barbSvg.querySelectorAll("path");
-    paths.forEach(path => {
-      svg.append("path")
-        .attr("d", path.getAttribute("d"))
-        .attr("transform-origin", `${cellSize/2} ${cellSize/2}`)
-        .attr("transform", `translate(${point.x * cellSize}, ${point.y * cellSize}) rotate(${point.direction * 180 / Math.PI})`)
-        .attr("class", "svg-wb");
-    });
-    // TODO: fix the 0.svg representation (not of svg-wb class)
-  }
-
-  svg.attr("viewBox", `0 0 ${nx * cellSize} ${ny * cellSize}`);
-  svg.node().setAttribute("preserveAspectRatio", "none");
-
+function generateWindBarbSvg(nx, ny, dlat, dlon, u, v, zoomLevel) {
+  
+  const svg_string = generate_wind_barbs_svg_overlay(nx, ny, dlat, dlon, u, v, BigInt(zoomLevel))
+  
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(svg_string, "image/svg+xml");
+  const svg = doc.documentElement;
+  
   // TODO: the barbs are not scaled correctly for non-square grids
   // TODO: the barbs are not centered in all cells due to projection issues
   return svg;

@@ -96,6 +96,10 @@ function displayVectorField(nx, ny, lat, lon, u, v) {
     [bounds[1][0] + cellSizeLat / 2, bounds[1][1] + cellSizeLon / 2]
   ];
 
+  map.fitBounds(adjustedBounds);
+
+  const zoomLevel = map.getZoom();
+
   // Also display a heatmap of the norm of the vector field
   const normValues = u.map((val, idx) => {
     if (isNaN(val) || isNaN(v[idx])) return NaN;
@@ -106,13 +110,11 @@ function displayVectorField(nx, ny, lat, lon, u, v) {
   heatLayer = L.svgOverlay(heatmapSvg.node(), adjustedBounds, {opacity: 0.6}).addTo(map);
 
   // Now display the wind barbs 
-  const svg = generateWindBarbSvg(nx, ny, lat, lon, u, v, 0.1);
-  
-  arrowLayers.push(L.svgOverlay(svg.node(), adjustedBounds).addTo(map));
+  let svg = generateWindBarbSvg(nx, ny, cellSizeLat, cellSizeLon, u, v, 20);
+  arrowLayers.push(L.svgOverlay(svg, adjustedBounds).addTo(map));
 
-  markAllPoints(lat, lon);
+  // markAllPoints(lat, lon);
 
-  map.fitBounds(bounds);
 }
 
 function displayHeatmap(nx, ny, lat, lon, values) {
@@ -238,7 +240,7 @@ init().then(() => {
                       `U: ${u_data.value.toFixed(2)}<br>` +
                       `V: ${v_data.value.toFixed(2)}<br>` +
                       `Speed: ${Math.sqrt(u_data.value**2 + v_data.value**2).toFixed(2)}<br>` +
-                      `Direction: ${(Math.atan2(v_data.value, u_data.value) * 180 / Math.PI).toFixed(2)}°`
+                      `Direction: ${(90 - Math.atan2(v_data.value, u_data.value) * 180 / Math.PI).toFixed(2)}°<br>`
                     )
           .openOn(map);
   
@@ -260,4 +262,16 @@ init().then(() => {
         .openOn(map);
     }
   });
+
+  // Function to update the zoom level display
+  function updateZoomLevel() {
+    const zoomLevelDiv = document.getElementById('zoom-level');
+    zoomLevelDiv.textContent = `Zoom Level: ${map.getZoom()}`;
+  }
+
+  // Initial update
+  updateZoomLevel();
+
+  // Update on zoom end
+  map.on('zoomend', updateZoomLevel);
 });
