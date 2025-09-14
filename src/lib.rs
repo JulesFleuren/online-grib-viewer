@@ -8,6 +8,7 @@ use std::collections::HashSet;
 
 pub mod overlays;
 pub mod windbarbs;
+pub mod projection;
 
 #[wasm_bindgen(start)]
 pub fn init() {

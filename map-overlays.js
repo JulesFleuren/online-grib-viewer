@@ -1,5 +1,5 @@
 import { getWindBarb } from './svg-wind-barbs/js/GetWindBarb.js';
-import { generate_wind_barbs_svg_overlay } from './pkg/online_grib_viewer.js';
+import { generate_wind_barbs_svg_overlay, generate_projected_wind_barbs_svg_overlay } from './pkg/online_grib_viewer.js';
 
 function generateHeatMapCanvas(nx, ny, values) {
   const canvas = document.createElement('canvas');
@@ -78,10 +78,11 @@ function generateHeatMapSvg(nx, ny, lat, lon, values) {
   return svg;
 }
 
-function generateWindBarbSvg(nx, ny, dlat, dlon, u, v, zoomLevel) {
+function generateWindBarbSvg(lat, lon, nlat, nlon, u, v, zoomLevel) {
   
-  const svg_string = generate_wind_barbs_svg_overlay(nx, ny, dlat, dlon, u, v, BigInt(zoomLevel))
-  
+  const svg_string = generate_projected_wind_barbs_svg_overlay(lat, lon, BigInt(nlat), BigInt(nlon), u, v, BigInt(zoomLevel))
+
+  console.log(svg_string)  
   const parser = new DOMParser();
   const doc = parser.parseFromString(svg_string, "image/svg+xml");
   const svg = doc.documentElement;
@@ -90,7 +91,6 @@ function generateWindBarbSvg(nx, ny, dlat, dlon, u, v, zoomLevel) {
   // TODO: the barbs are not centered in all cells due to projection issues
   return svg;
 }
-
 
 function valueToColor(value) {
   const color = {r: value*255, g: (1-value)*255, b: 0};

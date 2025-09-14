@@ -4,6 +4,7 @@ import { generateHeatMapCanvas, generateHeatMapSvg, generateWindBarbSvg } from '
 // certain parameter pairs are known to be vector fields
 const PARAMETER_PAIRS = {
   'current': { u: "grib2_10_1_2", v: "grib2_10_1_3" },
+  'wind': { u: "grib2_0_2_2", v: "grib2_0_2_3" },
 };
 
 let map;
@@ -114,7 +115,7 @@ function displayVectorField(nx, ny, lat, lon, u, v) {
   heatLayer = L.svgOverlay(heatmapSvg.node(), adjustedBounds, {opacity: 0.6}).addTo(map);
 
   // Now display the wind barbs 
-  let svg = generateWindBarbSvg(nx, ny, cellSizeLat, cellSizeLon, u, v, BigInt(zoomLevel));
+  let svg = generateWindBarbSvg(lat, lon, ny, nx, u, v, zoomLevel);
   arrowLayers.push(L.svgOverlay(svg, adjustedBounds).addTo(map));
   
   // build a cache of layers at different zoom levels
@@ -123,7 +124,7 @@ function displayVectorField(nx, ny, lat, lon, u, v) {
 
 
   for (let zl = zoomLevel + 1; zl <= maxZoomLevel; zl++) {
-    let svg = generateWindBarbSvg(nx, ny, cellSizeLat, cellSizeLon, u, v, BigInt(zl));
+    let svg = generateWindBarbSvg(lat, lon, ny, nx, u, v, BigInt(zl));
     arrowZoomLayers[zl] = svg;
   }
   // markAllPoints(lat, lon);
@@ -278,7 +279,7 @@ init().then(() => {
                       `U: ${u_data.value.toFixed(2)}<br>` +
                       `V: ${v_data.value.toFixed(2)}<br>` +
                       `Speed: ${Math.sqrt(u_data.value**2 + v_data.value**2).toFixed(2)}<br>` +
-                      `Direction: ${(90 - Math.atan2(v_data.value, u_data.value) * 180 / Math.PI).toFixed(2)}°<br>`
+                      `Direction: ${(180 + 90 - Math.atan2(v_data.value, u_data.value) * 180 / Math.PI).toFixed(2)}°<br>`
                     )
           .openOn(map);
   
