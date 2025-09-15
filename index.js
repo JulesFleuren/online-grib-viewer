@@ -102,7 +102,7 @@ function displayVectorField(nx, ny, lat, lon, u, v) {
   map.fitBounds(adjustedBounds);
 
   // TODO: max zoom level is now the same formula as in overlay.rs, but this is not very pretty
-  const maxZoomLevel = 5 - Math.floor(Math.log2(cellSizeLon));
+  const maxZoomLevel = 7 - Math.floor(Math.log2(cellSizeLon));
   const zoomLevel = map.getZoom();
 
   // Also display a heatmap of the norm of the vector field
