@@ -94,7 +94,9 @@ function showTimeSelect(selectedParameter) {
 
   // automatically select the first time stamp
   if (times.length > 0) {
-    displayParameter(times[0]);
+    selectedTime = findFirstNextTimestamp(selectedTime, times.map(t => Number(t)));
+    select.value = selectedTime;
+    displayParameter(selectedTime);
   }
 }
 
@@ -213,7 +215,7 @@ function displayParameter(time) {
   }
 }
 
-  // Function to update the zoom level display
+// Function to update the zoom level display
 function updateZoomLevel() {
   const zoomLevelDiv = document.getElementById('zoom-level');
   zoomLevelDiv.textContent = `Zoom Level: ${map.getZoom()}`;
@@ -236,7 +238,21 @@ function updateZoomLevel() {
   }
 }
 
+function findFirstNextTimestamp(timestamp, timestampArray) {
+  // returns the first element form timestampArray that is bigger or equal to timestamp
+  // We assume that timestampArray is sorted
+  for (var i = 0; i < timestampArray.length; i++) {
+    if (timestampArray[i] >= timestamp) {
+      return timestampArray[i];
+    }
+  }
+  // if all elements are smaller, return the last element
+  return timestampArray.at(-1)
+}
+
 init().then(() => {
+  // epoch time in seconds instead of miliseconds
+  selectedTime = Math.floor(Date.now() / 1000);
   map = L.map('map').setView([0, 0], 2);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> contributors'
