@@ -133,11 +133,14 @@ function displayVectorField(nx, ny, lat, lon, u, v) {
     [bounds[1][0] + cellSizeLat / 2, bounds[1][1] + cellSizeLon / 2]
   ];
 
-  map.fitBounds(adjustedBounds);
+  // map.fitBounds(adjustedBounds);
 
   // TODO: max zoom level is now the same formula as in overlay.rs, but this is not very pretty
   const maxZoomLevel = 7 - Math.floor(Math.log2(cellSizeLon));
-  const zoomLevel = map.getZoom();
+  const minZoomLevel = map.getBoundsZoom(adjustedBounds);
+  let zoomLevel = map.getZoom();
+  zoomLevel = Math.min(Math.max(zoomLevel, minZoomLevel), maxZoomLevel);
+  console.log(`zoom min: ${minZoomLevel} max: ${maxZoomLevel} current: ${zoomLevel}`)
 
   // Also display a heatmap of the norm of the vector field
   const normValues = u.map((val, idx) => {
@@ -157,7 +160,10 @@ function displayVectorField(nx, ny, lat, lon, u, v) {
   arrowZoomLayers[zoomLevel] = svg;
 
 
-  for (let zl = zoomLevel + 1; zl <= maxZoomLevel; zl++) {
+  for (let zl = minZoomLevel; zl <= maxZoomLevel; zl++) {
+    if (zl == zoomLevel) {
+      continue
+    }
     let svg = generateWindBarbSvgBlob(lat, lon, ny, nx, u, v, BigInt(zl));
     arrowZoomLayers[zl] = svg;
   }
@@ -184,7 +190,7 @@ function displayHeatmap(nx, ny, lat, lon, values) {
 
   heatLayer = L.svgOverlay(svg.node(), adjustedBounds, {opacity: 0.6}).addTo(map);
 
-  map.fitBounds(bounds);
+  // map.fitBounds(bounds);
 }
 
 function displayParameter(time) {
@@ -285,7 +291,8 @@ init().then(() => {
   document.getElementById('fileInput').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    showParameterSelect(file);
+    await showParameterSelect(file);
+    map.fitBounds(adjustedBounds);
   });
 
   document.getElementById('parameterSelect').addEventListener('change', (e) => {
