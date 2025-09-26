@@ -26,23 +26,29 @@ function clearMap() {
   arrowLayers = [];
 }
 
-function showParameterSelect(params) {
+async function showParameterSelect(file) {
+  const arrayBuffer = await file.arrayBuffer();
+  gribBytes = new Uint8Array(arrayBuffer);
+
+  parameters = get_available_parameters(gribBytes)
+
+  console.log('Available parameters:', parameters);
+
+  // add all available parameters as option to select object
   const select = document.getElementById('parameterSelect');
   select.innerHTML = '';
-  params.forEach(p => {
-    const name = p.name;
-    const key = p.key;
+  parameters.forEach(p => {
     const option = document.createElement('option');
-    option.value = key;
-    option.textContent = name;
+    option.value = p.key;
+    option.textContent = p.name;
     select.appendChild(option);
   });
 
   // Check if any parameter pairs are available for vector field display and add an option if so
   Object.keys(PARAMETER_PAIRS).forEach(pairName => {
     const pair = PARAMETER_PAIRS[pairName];
-    const hasU = params.some(p => p.key === pair.u);
-    const hasV = params.some(p => p.key === pair.v);
+    const hasU = parameters.some(p => p.key === pair.u);
+    const hasV = parameters.some(p => p.key === pair.v);
     if (hasU && hasV) {
       const option = document.createElement('option');
       option.value = `vector:${pair.u},${pair.v}`;
@@ -52,9 +58,30 @@ function showParameterSelect(params) {
   });
 
   document.getElementById('parameterField').style.display = '';
+
+  // automatically select the first parameter and show the timesteps
+  if (parameters.length > 0) {
+    showTimeSelect(parameters[0].key);
+  }
 }
 
-function showTimeSelect(times) {
+function showTimeSelect(selectedParameter) {
+  if (selectedParameter.startsWith('vector')) {
+      // Vector field
+      const [u_key, v_key] = selectedParameter.split(":")[1].split(',');
+      if (u_key && v_key) {
+        var timesU = get_available_timestamps(gribBytes, u_key);
+        var timesV = get_available_timestamps(gribBytes, v_key);
+        // find intersection of timesU and timesV
+        var times = timesU.filter(t => timesV.includes(t));
+      }
+    } else {
+        // Scalar field
+        const key = selectedParameter;
+        if (key) {
+          var times = get_available_timestamps(gribBytes, key);
+        }
+    }
   const select = document.getElementById('timestampSelect');
   select.innerHTML = '';
   times.forEach(t => {
@@ -64,6 +91,11 @@ function showTimeSelect(times) {
     select.appendChild(option);
   });
   document.getElementById('timestampField').style.display = '';
+
+  // automatically select the first time stamp
+  if (times.length > 0) {
+    displayParameter(times[0]);
+  }
 }
 
 
@@ -118,7 +150,7 @@ function displayVectorField(nx, ny, lat, lon, u, v) {
   let svg = generateWindBarbSvgBlob(lat, lon, ny, nx, u, v, zoomLevel);
   arrowLayers.push(L.imageOverlay(svg, adjustedBounds, {opacity: 1.0}).addTo(map));
   
-  // build a cache of layers at different zoom levels
+  // build a cache of layers at different zoom levels?
   arrowZoomLayers = {};
   arrowZoomLayers[zoomLevel] = svg;
 
@@ -213,42 +245,13 @@ init().then(() => {
   document.getElementById('fileInput').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    const arrayBuffer = await file.arrayBuffer();
-    gribBytes = new Uint8Array(arrayBuffer);
-
-    parameters = get_available_parameters(gribBytes).map(p => ({
-      name: p.name,
-      key: p.key,
-    }));
-
-    console.log('Available parameters:', parameters);
-
-    showParameterSelect(parameters);
-    document.getElementById('output').textContent = `Loaded ${parameters.length} parameters.`;
+    showParameterSelect(file);
   });
 
   document.getElementById('parameterSelect').addEventListener('change', (e) => {
     selectedParameter = e.target.value;
     // check if the selected value is a vector field
-    if (selectedParameter.startsWith('vector')) {
-      // Vector field
-      const [u_key, v_key] = selectedParameter.split(":")[1].split(',');
-      if (u_key && v_key) {
-        var timesU = get_available_timestamps(gribBytes, u_key);
-        var timesV = get_available_timestamps(gribBytes, v_key);
-        // find intersection of timesU and timesV
-        var times = timesU.filter(t => timesV.includes(t));
-        showTimeSelect(times);
-      }
-      return;
-    } else {
-        // Scalar field
-        const key = selectedParameter;
-        if (key) {
-          var timesU = get_available_timestamps(gribBytes, key);
-          showTimeSelect(timesU);
-        }
-    }
+    showTimeSelect(selectedParameter);
   });
 
   document.getElementById('timestampSelect').addEventListener('change', (e) => {
