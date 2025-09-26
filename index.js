@@ -1,5 +1,5 @@
 import init, { get_available_parameters, get_vector_field, get_available_timestamps, get_scalar_field, get_grid_shape, query_grib_message_at_point } from './pkg/online_grib_viewer.js';
-import { generateHeatMapCanvas, generateHeatMapSvg, generateWindBarbSvg } from './map-overlays.js';
+import { generateHeatMapCanvas, generateHeatMapSvg, generateWindBarbSvg, generateWindBarbSvgBlob } from './map-overlays.js';
 
 // certain parameter pairs are known to be vector fields
 const PARAMETER_PAIRS = {
@@ -115,8 +115,8 @@ function displayVectorField(nx, ny, lat, lon, u, v) {
   heatLayer = L.svgOverlay(heatmapSvg.node(), adjustedBounds, {opacity: 0.6}).addTo(map);
 
   // Now display the wind barbs 
-  let svg = generateWindBarbSvg(lat, lon, ny, nx, u, v, zoomLevel);
-  arrowLayers.push(L.svgOverlay(svg, adjustedBounds).addTo(map));
+  let svg = generateWindBarbSvgBlob(lat, lon, ny, nx, u, v, zoomLevel);
+  arrowLayers.push(L.imageOverlay(svg, adjustedBounds, {opacity: 1.0}).addTo(map));
   
   // build a cache of layers at different zoom levels
   arrowZoomLayers = {};
@@ -124,12 +124,12 @@ function displayVectorField(nx, ny, lat, lon, u, v) {
 
 
   for (let zl = zoomLevel + 1; zl <= maxZoomLevel; zl++) {
-    let svg = generateWindBarbSvg(lat, lon, ny, nx, u, v, BigInt(zl));
+    let svg = generateWindBarbSvgBlob(lat, lon, ny, nx, u, v, BigInt(zl));
     arrowZoomLayers[zl] = svg;
   }
   // markAllPoints(lat, lon);
 
-  console.log(arrowZoomLayers);
+  // console.log(arrowZoomLayers);
 
 }
 
@@ -199,7 +199,7 @@ function updateZoomLevel() {
 
     // Add the appropriate layer for the current zoom level
     if (arrowZoomLayers[targetZoom]) {
-      arrowLayers.push(L.svgOverlay(arrowZoomLayers[targetZoom], adjustedBounds).addTo(map));
+      arrowLayers.push(L.imageOverlay(arrowZoomLayers[targetZoom], adjustedBounds).addTo(map));
     }
   }
 }

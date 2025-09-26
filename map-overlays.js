@@ -92,9 +92,18 @@ function generateWindBarbSvg(lat, lon, nlat, nlon, u, v, zoomLevel) {
   return svg;
 }
 
+function generateWindBarbSvgBlob(lat, lon, nlat, nlon, u, v, zoomLevel) {
+  
+  const svgString = generate_wind_barbs_svg_overlay(lat, lon, BigInt(nlat), BigInt(nlon), u, v, BigInt(zoomLevel))
+  const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(svgBlob);
+  
+  return url;
+}
+
 function valueToColor(value) {
   const color = {r: value*255, g: (1-value)*255, b: 0};
   return color;
 }
 
-export { generateHeatMapCanvas, generateHeatMapSvg, generateWindBarbSvg };
+export { generateHeatMapCanvas, generateHeatMapSvg, generateWindBarbSvg, generateWindBarbSvgBlob };
