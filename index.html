@@ -32,10 +32,21 @@
         </div>
         <div class="field" id="timestampField" style="display:none;">
           <label class="label">Select Timestamp</label>
-          <div class="control">
-            <div class="select">
-              <select id="timestampSelect"></select>
+          <div class="field is-grouped">
+            <p class="control">
+              <button class="button is-link" id="nowTimestampButton">Now</button>
+            </p>
+            <div class="control">
+              <div class="select">
+                <select id="timestampSelect"></select>
+              </div>
             </div>
+            <p class="control">
+              <button class="button is-link" id="prevTimestampButton">&#8592;</button>
+            </p>
+            <p class="control">
+              <button class="button is-link" id="nextTimestampButton">&#8594;</button>
+            </p>
           </div>
         </div>
         <div id="output"></div>

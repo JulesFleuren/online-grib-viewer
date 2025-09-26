@@ -87,14 +87,14 @@ function showTimeSelect(selectedParameter) {
   times.forEach(t => {
     const option = document.createElement('option');
     option.value = t;
-    option.textContent = new Date(Number(t) * 1000).toISOString();
+    option.textContent = new Date(Number(t) * 1000).toString();
     select.appendChild(option);
   });
   document.getElementById('timestampField').style.display = '';
 
-  // automatically select the first time stamp
+  // automatically select timestamp
   if (times.length > 0) {
-    selectedTime = findFirstNextTimestamp(selectedTime, times.map(t => Number(t)));
+    selectedTime = findNextOrEqualTimestamp(selectedTime, times.map(t => Number(t)));
     select.value = selectedTime;
     displayParameter(selectedTime);
   }
@@ -238,7 +238,7 @@ function updateZoomLevel() {
   }
 }
 
-function findFirstNextTimestamp(timestamp, timestampArray) {
+function findNextOrEqualTimestamp(timestamp, timestampArray) {
   // returns the first element form timestampArray that is bigger or equal to timestamp
   // We assume that timestampArray is sorted
   for (var i = 0; i < timestampArray.length; i++) {
@@ -248,6 +248,30 @@ function findFirstNextTimestamp(timestamp, timestampArray) {
   }
   // if all elements are smaller, return the last element
   return timestampArray.at(-1)
+}
+
+function findNextTimestamp(timestamp, timestampArray) {
+  // returns the first element from timestampArray that is bigger than timestamp
+  // We assume that timestampArray is sorted
+  for (var i = 0; i < timestampArray.length; i++) {
+    if (timestampArray[i] > timestamp) {
+      return timestampArray[i];
+    }
+  }
+  // if all elements are smaller, return the last element
+  return timestampArray.at(-1)
+}
+
+function findPreviousTimestamp(timestamp, timestampArray) {
+  // returns the biggest element from timestampArray that is smaller than timestamp
+  // We assume that timestampArray is sorted
+  for (var i = timestampArray.length - 1; i >= 0; i--) {
+    if (timestampArray[i] < timestamp) {
+      return timestampArray[i];
+    }
+  }
+  // if all elements are bigger, return the first element
+  return timestampArray.at(0)
 }
 
 init().then(() => {
@@ -272,6 +296,30 @@ init().then(() => {
 
   document.getElementById('timestampSelect').addEventListener('change', (e) => {
     selectedTime = Number(e.target.value);
+    displayParameter(selectedTime);
+  });
+
+  document.getElementById('nowTimestampButton').addEventListener("click", () => {
+    const select = document.getElementById('timestampSelect');
+    const availableTimes = Array.from(select.options).map(((o) => Number(o.value)));
+    selectedTime = findNextOrEqualTimestamp(Math.floor(Date.now() / 1000), availableTimes);
+    select.value = selectedTime;
+    displayParameter(selectedTime);
+  });
+
+  document.getElementById('nextTimestampButton').addEventListener("click", () => {
+    const select = document.getElementById('timestampSelect');
+    const availableTimes = Array.from(select.options).map(((o) => Number(o.value)));
+    selectedTime = findNextTimestamp(selectedTime, availableTimes);
+    select.value = selectedTime;
+    displayParameter(selectedTime);
+  });
+
+  document.getElementById('prevTimestampButton').addEventListener("click", () => {
+    const select = document.getElementById('timestampSelect');
+    const availableTimes = Array.from(select.options).map(((o) => Number(o.value)));
+    selectedTime = findPreviousTimestamp(selectedTime, availableTimes);
+    select.value = selectedTime;
     displayParameter(selectedTime);
   });
 
