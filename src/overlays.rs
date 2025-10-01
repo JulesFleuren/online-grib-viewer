@@ -1,7 +1,10 @@
+use grib::{GribError, GridDefinition, GridDefinitionTemplateValues};
 use log::debug;
 use wasm_bindgen::prelude::*;
 use core::f64;
+use std::collections::HashMap;
 use std::fmt::{format, Write};
+use std::iter::Enumerate;
 
 use crate::windbarbs::get_wind_barb_path;
 use crate::projection::{epsg_3857_projection, inverse_epsg_3857_projection};
@@ -15,7 +18,7 @@ pub fn generate_wind_barbs_svg_overlay(
     u: Vec<f64>,
     v: Vec<f64>,
     zoom_level: i64,
-) -> String {
+) -> Result<JsValue, JsValue> {
     let mut svg = String::new();
 
     let min_lat = lat.iter().cloned().fold(f64::INFINITY, f64::min);
@@ -72,7 +75,11 @@ pub fn generate_wind_barbs_svg_overlay(
         }
     }
     svg.push_str("</svg>");
-    svg
+    
+    let return_value = js_sys::Object::new();
+    js_sys::Reflect::set(&return_value, &JsValue::from_str("svgString"), &JsValue::from(svg)).expect("failed to set svgString");
+
+    Ok(JsValue::from(return_value))
 }
 
 fn index_step_and_scale_based_on_zoom(dx: f64, dy: f64, zoom_level: i64) -> (usize, f64) {
@@ -88,4 +95,110 @@ fn index_step_and_scale_based_on_zoom(dx: f64, dy: f64, zoom_level: i64) -> (usi
     let index_step = usize::max(1_usize, 2_f64.powf((max_zoom_level - zoom_level)as f64) as usize);
     let scale = scale_multiplier*(index_step as f64);
     (index_step, scale)
+}
+
+fn get_lat_lon_1d(
+    grid: &GridDefinitionTemplateValues,
+) -> Result<(Vec<f32>, Vec<f32>), GribError> {
+    match grid {
+        GridDefinitionTemplateValues::Template0(grid) => {
+            // TODO: extracting the 1d lats and lons is convoluted, but there doesn't seem to be an easy way to do it.
+            // The RegularGridIterator has the two arrays we are looking for as fields, but they are private. Perhaps 
+            // open an issue on grib-rs?
+
+            let latlons = grid.latlons()?;
+            let mut lat = vec![0_f32; grid.nj as usize];
+            let mut lon = vec![0_f32; grid.ni as usize];
+            let (lat_2d, lon_2d): (Vec<f32>, Vec<f32>) = latlons.unzip();
+            for (idx, (i, j)) in grid.ij()?.enumerate() {
+                debug!{"{}, {}", i, j};
+                if i == 0 {
+                    lat[j] = lat_2d[idx];
+                }
+                if j == 0 {
+                    lon[i] = lon_2d[idx];
+                }
+            }
+            return Ok((lat, lon));
+        }
+        GridDefinitionTemplateValues::Template20(_) => {
+            // Polar stereographic logic here
+            unimplemented!("1d lat/lon not implemented for Lambert grid")
+        }
+        GridDefinitionTemplateValues::Template30(_) => {
+            // Lambert grid logic here
+            unimplemented!("1d lat/lon not implemented for Lambert grid")
+        }
+        GridDefinitionTemplateValues::Template40(grid) => {
+            let latlons = grid.latlons()?;
+            let mut lat = vec![0_f32; grid.nj as usize];
+            let mut lon = vec![0_f32; grid.ni as usize];
+            let (lat_2d, lon_2d): (Vec<f32>, Vec<f32>) = latlons.unzip();
+            for (i, j) in grid.ij()? {
+                if i == 0 {
+                    lat[j] = lat_2d[j];
+                }
+                if j == 0 {
+                    lon[i] = lon_2d[i];
+                }
+            }
+            return Ok((lat, lon));
+        }
+    }
+}
+
+fn get_index_map(grid: &GridDefinitionTemplateValues) -> Result<HashMap<(usize, usize), usize>, GribError> {
+    // TODO: can this be done without a HashMap, but with a formula?
+    let (ni, nj) = grid.grid_shape();
+    let mut map: HashMap<(usize, usize), usize> = HashMap::with_capacity(ni * nj);
+    for (idx, (i, j)) in grid.ij()?.enumerate() {
+        map.insert((i, j), idx);
+    }
+    Ok(map)
+}
+
+#[cfg(test)]
+mod tests {
+    use grib::GridDefinitionTemplateValues;
+
+    use crate::overlays::{get_index_map, get_lat_lon_1d};
+
+
+    #[test]
+    fn test_get_lat_lon_1d() {
+        let def = grib::LatLonGridDefinition {
+            ni: 2,
+            nj: 3,
+            first_point_lat: 0,
+            first_point_lon: 0,
+            last_point_lat: 2_000_000,
+            last_point_lon: 1_000_000,
+            scanning_mode: grib::ScanningMode(0b01000000),
+        };
+        let grid = GridDefinitionTemplateValues::Template0(def);
+        let (lat_1d, lon_1d) = get_lat_lon_1d(&grid).expect("get_lat_lon_1d failed");
+        assert_eq!(lat_1d, vec![0.0, 1.0, 2.0]);
+        assert_eq!(lon_1d, vec![0.0, 1.0]);
+    }
+
+    #[test]
+    fn test_index_map() {
+        let def = grib::LatLonGridDefinition {
+            ni: 2,
+            nj: 3,
+            first_point_lat: 0,
+            first_point_lon: 0,
+            last_point_lat: 2_000_000,
+            last_point_lon: 1_000_000,
+            scanning_mode: grib::ScanningMode(0b01110000),
+        };
+        let grid = GridDefinitionTemplateValues::Template0(def);
+
+        let ij = grid.ij().expect("ij failed");
+        let map = get_index_map(&grid).expect("get_index_map failed");
+
+        for (idx, (i, j)) in ij.enumerate() {
+            assert_eq!(idx, *map.get(&(i, j)).expect(&format!("i: {}, j: {} not in map", i, j)));
+        }
+    }
 }
