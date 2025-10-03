@@ -119,7 +119,19 @@ function markAllPoints(lat, lon) {
   }
 }
 
-function displayVectorField(nx, ny, lat, lon, u, v) {
+function displayVectorField(u_key, v_key, time) {
+
+  const u_data = get_scalar_field(gribBytes, u_key, BigInt(time));
+  const v_data = get_scalar_field(gribBytes, v_key, BigInt(time));
+  const shape = get_grid_shape(gribBytes, u_key);
+
+  const nx = shape.nx;
+  const ny = shape.ny;
+  const lat = u_data.lat;
+  const lon = u_data.lon;
+  const u = u_data.values;
+  const v = v_data.values;
+
   clearMap();
 
   const bounds = [[Math.min(...lat), Math.min(...lon)], [Math.max(...lat), Math.max(...lon)]];
@@ -151,10 +163,10 @@ function displayVectorField(nx, ny, lat, lon, u, v) {
   const heatmapSvg = generateHeatMapSvg(nx, ny, lat, lon, normValues);
   heatLayer = L.svgOverlay(heatmapSvg.node(), adjustedBounds, {opacity: 0.6}).addTo(map);
 
-  // Now display the wind barbs 
+  // Now display the wind barbs
   let svg = generateWindBarbSvgBlob(lat, lon, ny, nx, u, v, zoomLevel);
   arrowLayers.push(L.imageOverlay(svg, adjustedBounds, {opacity: 1.0}).addTo(map));
-  
+
   // build a cache of layers at different zoom levels?
   arrowZoomLayers = {};
   arrowZoomLayers[zoomLevel] = svg;
@@ -170,12 +182,19 @@ function displayVectorField(nx, ny, lat, lon, u, v) {
   // markAllPoints(lat, lon);
 
   // console.log(arrowZoomLayers);
-
 }
 
-function displayHeatmap(nx, ny, lat, lon, values) {
+function displayHeatmap(key, time) {
+  const data = get_scalar_field(gribBytes, key, BigInt(time));
+  const shape = get_grid_shape(gribBytes, key);
+
+  const nx = shape.nx;
+  const ny = shape.ny;
+  const lat = data.lat;
+  const lon = data.lon;
+  const values = data.values;
   clearMap();
-  
+
   const bounds = [[Math.min(...lat), Math.min(...lon)], [Math.max(...lat), Math.max(...lon)]];
   // the svg extends half a cellsize beyond the bounds, so we need to adjust the bounds accordingly
   const cellSizeLat = (Math.max(...lat) - Math.min(...lat)) / ny;
@@ -185,7 +204,7 @@ function displayHeatmap(nx, ny, lat, lon, values) {
     [bounds[0][0] - cellSizeLat / 2, bounds[0][1] - cellSizeLon / 2],
     [bounds[1][0] + cellSizeLat / 2, bounds[1][1] + cellSizeLon / 2]
   ];
-  
+
   const svg = generateHeatMapSvg(nx, ny, lat, lon, values);
 
   heatLayer = L.svgOverlay(svg.node(), adjustedBounds, {opacity: 0.6}).addTo(map);
@@ -200,10 +219,7 @@ function displayParameter(time) {
     // Vector field
     const [u_key, v_key] = selectedParameter.split(":")[1].split(',');
     if (u_key && v_key) {
-      const u_data = get_scalar_field(gribBytes, u_key, BigInt(time));
-      const v_data = get_scalar_field(gribBytes, v_key, BigInt(time));
-      const shape = get_grid_shape(gribBytes, u_key);
-      displayVectorField(shape.nx, shape.ny, u_data.lat, u_data.lon, u_data.values, v_data.values);
+      displayVectorField(u_key, v_key, time);
 
       document.getElementById('output').textContent = `Displaying vector field with U key: ${u_key} and V key: ${v_key}`;
     }
@@ -212,11 +228,9 @@ function displayParameter(time) {
       // Scalar field
       const key = selectedParameter;
       if (key) {
-        const data = get_scalar_field(gribBytes, key, BigInt(time));
-        const shape = get_grid_shape(gribBytes, key);
-        displayHeatmap(shape.nx, shape.ny, data.lat, data.lon, data.values);
+        displayHeatmap(key, time);
 
-        document.getElementById('output').textContent = `Displaying parameter at key ${key}`;  
+        document.getElementById('output').textContent = `Displaying parameter at key ${key}`;
       }
   }
 }
@@ -356,7 +370,7 @@ init().then(() => {
                       `Direction: ${(180 + 90 - Math.atan2(v_data.value, u_data.value) * 180 / Math.PI).toFixed(2)}°<br>`
                     )
           .openOn(map);
-  
+
         // TODO: wind direction is inverted
         return;
       }
