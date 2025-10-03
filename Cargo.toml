@@ -18,3 +18,5 @@ grib = { version = "0.11.2", features = ["time-calculation"] }
 console_error_panic_hook = "0.1.7"
 quick-xml = "0.38.3"
 log = "0.4.28"
+num = "0.4.3"
+float-cmp = "0.10.0"
