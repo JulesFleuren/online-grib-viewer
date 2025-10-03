@@ -1,5 +1,5 @@
-import init, { get_available_parameters, get_vector_field, get_available_timestamps, get_scalar_field, get_grid_shape, query_grib_message_at_point } from './pkg/online_grib_viewer.js';
-import { generateHeatMapCanvas, generateHeatMapSvg, generateWindBarbSvg, generateWindBarbSvgBlob } from './map-overlays.js';
+import init, { get_available_parameters, get_vector_field, get_available_timestamps, get_scalar_field, get_grid_shape, query_grib_message_at_point, wind_barb_overlay } from './pkg/online_grib_viewer.js';
+import { generateHeatMapCanvas, generateHeatMapSvg } from './map-overlays.js';
 
 // certain parameter pairs are known to be vector fields
 const PARAMETER_PAIRS = {
@@ -121,63 +121,49 @@ function markAllPoints(lat, lon) {
 
 function displayVectorField(u_key, v_key, time) {
 
-  const u_data = get_scalar_field(gribBytes, u_key, BigInt(time));
-  const v_data = get_scalar_field(gribBytes, v_key, BigInt(time));
-  const shape = get_grid_shape(gribBytes, u_key);
-
-  const nx = shape.nx;
-  const ny = shape.ny;
-  const lat = u_data.lat;
-  const lon = u_data.lon;
-  const u = u_data.values;
-  const v = v_data.values;
-
   clearMap();
-
-  const bounds = [[Math.min(...lat), Math.min(...lon)], [Math.max(...lat), Math.max(...lon)]];
-
-  // the svg extends half a cellsize beyond the bounds, so we need to adjust the bounds accordingly
-  const cellSizeLat = (Math.max(...lat) - Math.min(...lat)) / ny;
-  const cellSizeLon = (Math.max(...lon) - Math.min(...lon)) / nx;
-
-  adjustedBounds = [
-    [bounds[0][0] - cellSizeLat / 2, bounds[0][1] - cellSizeLon / 2],
-    [bounds[1][0] + cellSizeLat / 2, bounds[1][1] + cellSizeLon / 2]
-  ];
 
   // map.fitBounds(adjustedBounds);
 
-  // TODO: max zoom level is now the same formula as in overlay.rs, but this is not very pretty
-  const maxZoomLevel = 7 - Math.floor(Math.log2(cellSizeLon));
+  // // Display a heatmap of the norm of the vector field
+  // const normValues = u.map((val, idx) => {
+  //   if (isNaN(val) || isNaN(v[idx])) return NaN;
+  //   return Math.sqrt(val*val + v[idx]*v[idx]);
+  // });
+
+  // const heatmapSvg = generateHeatMapSvg(nx, ny, lat, lon, normValues);
+  // heatLayer = L.svgOverlay(heatmapSvg.node(), adjustedBounds, {opacity: 0.6}).addTo(map);
+
+
+  // generate wind barb overlay
   const minZoomLevel = map.getBoundsZoom(adjustedBounds);
   let zoomLevel = map.getZoom();
-  zoomLevel = Math.min(Math.max(zoomLevel, minZoomLevel), maxZoomLevel);
-  console.log(`zoom min: ${minZoomLevel} max: ${maxZoomLevel} current: ${zoomLevel}`)
-
-  // Also display a heatmap of the norm of the vector field
-  const normValues = u.map((val, idx) => {
-    if (isNaN(val) || isNaN(v[idx])) return NaN;
-    return Math.sqrt(val*val + v[idx]*v[idx]);
-  });
-
-  const heatmapSvg = generateHeatMapSvg(nx, ny, lat, lon, normValues);
-  heatLayer = L.svgOverlay(heatmapSvg.node(), adjustedBounds, {opacity: 0.6}).addTo(map);
+  zoomLevel = Math.max(zoomLevel, minZoomLevel);
+  const svgOverlay = wind_barb_overlay(gribBytes, u_key, v_key, BigInt(time), BigInt(zoomLevel));
+  const maxZoomLevel = svgOverlay.maxZoomLevel;
+  zoomLevel = Math.min(zoomLevel, Number(maxZoomLevel));
 
   // Now display the wind barbs
-  let svg = generateWindBarbSvgBlob(lat, lon, ny, nx, u, v, zoomLevel);
-  arrowLayers.push(L.imageOverlay(svg, adjustedBounds, {opacity: 1.0}).addTo(map));
+  const svgBlob = new Blob([svgOverlay.svgString], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(svgBlob);
 
-  // build a cache of layers at different zoom levels?
+  const bounds = [
+    [svgOverlay.minLat, svgOverlay.minLon],
+    [svgOverlay.maxLat, svgOverlay.maxLon],
+  ]
+
+  arrowLayers.push(L.imageOverlay(url, bounds, {opacity: 1.0}).addTo(map));
+
+  // build a cache of layers at different zoom levels
   arrowZoomLayers = {};
-  arrowZoomLayers[zoomLevel] = svg;
-
+  arrowZoomLayers[zoomLevel] = svgOverlay;
 
   for (let zl = minZoomLevel; zl <= maxZoomLevel; zl++) {
     if (zl == zoomLevel) {
       continue
     }
-    let svg = generateWindBarbSvgBlob(lat, lon, ny, nx, u, v, BigInt(zl));
-    arrowZoomLayers[zl] = svg;
+    const svgOverlay = wind_barb_overlay(gribBytes, u_key, v_key, BigInt(time), BigInt(zl));
+    arrowZoomLayers[zl] = svgOverlay;
   }
   // markAllPoints(lat, lon);
 
@@ -245,15 +231,26 @@ function updateZoomLevel() {
     const maxZoom = Math.max(...Object.keys(arrowZoomLayers).map(zl => Number(zl)));
     const minZoom = Math.min(...Object.keys(arrowZoomLayers).map(zl => Number(zl)));
     const currentZoom = map.getZoom();
-    let targetZoom = Math.min(Math.max(currentZoom, minZoom), maxZoom);
+    if (currentZoom > maxZoom || currentZoom < minZoom) {
+      return;
+    }
 
     // Remove existing arrow layers
     arrowLayers.forEach(layer => map.removeLayer(layer));
     arrowLayers = [];
 
     // Add the appropriate layer for the current zoom level
-    if (arrowZoomLayers[targetZoom]) {
-      arrowLayers.push(L.imageOverlay(arrowZoomLayers[targetZoom], adjustedBounds).addTo(map));
+    if (arrowZoomLayers[currentZoom]) {
+      const svgOverlay = arrowZoomLayers[currentZoom]
+      const svgBlob = new Blob([svgOverlay.svgString], { type: "image/svg+xml;charset=utf-8" });
+      const url = URL.createObjectURL(svgBlob);
+
+      const bounds = [
+        [svgOverlay.minLat, svgOverlay.minLon],
+        [svgOverlay.maxLat, svgOverlay.maxLon],
+      ]
+
+      arrowLayers.push(L.imageOverlay(url, bounds, {opacity: 1.0}).addTo(map));
     }
   }
 }

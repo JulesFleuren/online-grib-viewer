@@ -1,10 +1,12 @@
-use console_log::log;
+use grib::{GridDefinitionTemplateValues};
 use wasm_bindgen::prelude::*;
 use console_error_panic_hook;
 use grib::codetables::{Lookup, CodeTable4_2};
 use js_sys::{Float32Array};
 use std::{collections::HashMap, error::Error};
 use std::collections::HashSet;
+
+use crate::overlays::generate_wind_barbs_svg_overlay;
 
 pub mod overlays;
 pub mod windbarbs;
@@ -13,7 +15,7 @@ pub mod projection;
 #[wasm_bindgen(start)]
 pub fn init() {
     console_error_panic_hook::set_once();
-    console_log::init_with_level(log::Level::Debug).expect("failed to initialize logging"); 
+    console_log::init_with_level(log::Level::Debug).expect("failed to initialize logging");
 }
 
 #[wasm_bindgen]
@@ -35,7 +37,7 @@ pub fn get_messages(bytes: &[u8]) -> Vec<JsValue> {
         let (first, _second) = message.prod_def().fixed_surfaces().expect("missing fixed surfaces");
         let elevation_level = first.value();
         let elevation_unit = first.unit().map(|s| format!(" [{s}]")).unwrap_or_default();
-        
+
         let result_message = js_sys::Object::new();
         js_sys::Reflect::set(&result_message, &JsValue::from_str("index0"), &JsValue::from(index.0)).expect("failed to set index0");
         js_sys::Reflect::set(&result_message, &JsValue::from_str("index1"), &JsValue::from(index.1)).expect("failed to set index1");
@@ -63,7 +65,7 @@ pub fn get_grid_shape(bytes: &[u8], message_index: usize, message_subindex: usiz
     js_sys::Reflect::set(&result, &JsValue::from_str("nx"), &JsValue::from(grid_shape_nx)).unwrap();
     js_sys::Reflect::set(&result, &JsValue::from_str("ny"), &JsValue::from(grid_shape_ny)).unwrap();
     JsValue::from(result)
-}   
+}
 
 #[wasm_bindgen]
 pub fn get_available_parameters(bytes: &[u8]) -> Vec<JsValue> {
@@ -207,6 +209,32 @@ pub fn get_vector_field(bytes: &[u8], u_index: usize, v_index: usize, u_subindex
     JsValue::from(result)
 }
 
+#[wasm_bindgen]
+pub fn wind_barb_overlay(bytes: &[u8], key_u: &str, key_v: &str, time: i64, zoom_level: i64) -> Result<JsValue, JsValue> {
+    let param_u = grib_parameter_from_key(key_u)?;
+    let index_u = find_grib_index(bytes, param_u.0, param_u.1, param_u.2, time)?;
+    let param_v = grib_parameter_from_key(key_v)?;
+    let index_v = find_grib_index(bytes, param_v.0, param_v.1, param_v.2, time)?;
+
+    // it is assumed that u and v have the same grid
+    // // TODO: should this be checked?
+    let (grid, u) = get_grid_and_values(bytes, index_u).expect("failed decoding u submessage");
+    let (_grid, v) = get_grid_and_values(bytes, index_v).expect("failed decoding v submessage");
+
+    let svg_overlay = generate_wind_barbs_svg_overlay(&grid, u, v, zoom_level).expect("failed generating wind barb overlay");
+
+    // Create a JS object with the arrays
+    let result = js_sys::Object::new();
+    js_sys::Reflect::set(&result, &JsValue::from_str("svgString"), &JsValue::from(svg_overlay.svg_string)).unwrap();
+    js_sys::Reflect::set(&result, &JsValue::from_str("minLat"), &JsValue::from(svg_overlay.min_lat)).unwrap();
+    js_sys::Reflect::set(&result, &JsValue::from_str("maxLat"), &JsValue::from(svg_overlay.max_lat)).unwrap();
+    js_sys::Reflect::set(&result, &JsValue::from_str("minLon"), &JsValue::from(svg_overlay.min_lon)).unwrap();
+    js_sys::Reflect::set(&result, &JsValue::from_str("maxLon"), &JsValue::from(svg_overlay.max_lon)).unwrap();
+    js_sys::Reflect::set(&result, &JsValue::from_str("maxZoomLevel"), &JsValue::from(svg_overlay.max_zoom_level)).unwrap();
+
+    Ok(JsValue::from(result))
+}
+
 fn find_closest_point_in_grid(lat: &Vec<f32>, lon: &Vec<f32>, query_lat: f32, query_lon: f32) -> usize {
     let mut closest_point_index = 0;
     let mut closest_distance = f32::MAX;
@@ -221,6 +249,37 @@ fn find_closest_point_in_grid(lat: &Vec<f32>, lon: &Vec<f32>, query_lat: f32, qu
         }
     }
     closest_point_index
+}
+
+fn get_grid_and_values(
+    byte_string: &[u8],
+    message_index: (usize, usize)
+) -> Result<(GridDefinitionTemplateValues, Vec<f32>), Box<dyn Error>> {
+    // Parse the GRIB2 message.
+    let grib2 = grib::from_bytes(byte_string)?;
+
+    // Find the target submessage.
+    let (_index, submessage) = grib2
+        .iter()
+        .find(|(index, _)| *index == message_index)
+        .ok_or("no such index")?;
+
+    let grid_def = submessage.grid_def();
+    let grid = GridDefinitionTemplateValues::try_from(grid_def)?;
+
+    // Prepare a decoder.
+    let decoder = grib::Grib2SubmessageDecoder::from(submessage)?;
+
+    // Actually dispatch a decoding process and get an iterator of decoded values.
+    // There are various methods available for compressing GRIB2 data, but some are
+    // not yet supported by this library and may return errors.
+    let values_iterator = decoder.dispatch()?;
+
+    // extract values from iterator
+    let values = values_iterator
+        .collect();
+
+    Ok((grid, values))
 }
 
 fn decode_layer(byte_string: &[u8], message_index: (usize, usize)) -> Result<(Vec<f32>, Vec<f32>, Vec<f32>), Box<dyn Error>>
@@ -263,4 +322,15 @@ fn haversine_distance(lat1: f32, lon1: f32, lat2: f32, lon2: f32) -> f32 {
     let a = ((lat2 - lat1) / 2.0).to_radians().sin().powi(2)
         + lat1.to_radians().cos() * lat2.to_radians().cos() * ((lon2 - lon1) / 2.0).to_radians().sin().powi(2);
     2.0 * EARTH_RADIUS * a.sqrt().asin()
+}
+
+fn grib_parameter_from_key(key: &str) -> Result<(u8, u8, u8), String> {
+    let parts: Vec<&str> = key.split('_').collect();
+    if parts.len() != 4 || parts[0] != "grib2" {
+        return Err("invalid key format".to_string());
+    }
+    let discipline: u8 = parts[1].parse().expect("invalid discipline");
+    let category: u8 = parts[2].parse().expect("invalid category");
+    let parameter: u8 = parts[3].parse().expect("invalid parameter");
+    Ok((discipline, category, parameter))
 }

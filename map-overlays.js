@@ -1,5 +1,5 @@
 import { getWindBarb } from './svg-wind-barbs/js/GetWindBarb.js';
-import { generate_wind_barbs_svg_overlay } from './pkg/online_grib_viewer.js';
+import { wind_barb_overlay } from './pkg/online_grib_viewer.js';
 
 function generateHeatMapCanvas(nx, ny, values) {
   const canvas = document.createElement('canvas');
@@ -79,31 +79,32 @@ function generateHeatMapSvg(nx, ny, lat, lon, values) {
 }
 
 function generateWindBarbSvg(lat, lon, nlat, nlon, u, v, zoomLevel) {
-  
+
   const svg_string = generate_wind_barbs_svg_overlay(lat, lon, BigInt(nlat), BigInt(nlon), u, v, BigInt(zoomLevel))
 
-  console.log(svg_string)  
+  console.log(svg_string)
   const parser = new DOMParser();
   const doc = parser.parseFromString(svg_string, "image/svg+xml");
   const svg = doc.documentElement;
-  
+
   // TODO: the barbs are not scaled correctly for non-square grids
   // TODO: the barbs are not centered in all cells due to projection issues
   return svg;
 }
 
-function generateWindBarbSvgBlob(lat, lon, nlat, nlon, u, v, zoomLevel) {
-  
-  const svgString = generate_wind_barbs_svg_overlay(lat, lon, BigInt(nlat), BigInt(nlon), u, v, BigInt(zoomLevel))
-  const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
-  const url = URL.createObjectURL(svgBlob);
-  
-  return url;
-}
+// function generateWindBarbSvgBlob(lat, lon, nlat, nlon, u, v, zoomLevel) {
+
+//   const overlay = wind_barb_overlay(lat, lon, BigInt(nlat), BigInt(nlon), u, v, BigInt(zoomLevel));
+
+//   const svgBlob = new Blob([overlay.svgString], { type: "image/svg+xml;charset=utf-8" });
+//   const url = URL.createObjectURL(svgBlob);
+
+//   return url;
+// }
 
 function valueToColor(value) {
   const color = {r: value*255, g: (1-value)*255, b: 0};
   return color;
 }
 
-export { generateHeatMapCanvas, generateHeatMapSvg, generateWindBarbSvg, generateWindBarbSvgBlob };
+export { generateHeatMapCanvas, generateHeatMapSvg, generateWindBarbSvg };

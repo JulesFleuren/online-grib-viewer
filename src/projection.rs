@@ -42,7 +42,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::projection::{epsg_3857_projection, inverse_epsg_3857_projection, FALSE_EASTING, FALSE_NORTHING};
+    use crate::projection::{epsg_3857_projection, inverse_epsg_3857_projection};
 
     static TOL: f64 = 0.01;
     #[test]

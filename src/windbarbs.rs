@@ -1,21 +1,21 @@
 /// This file contains the SVG paths for different wind barb representations. It is modified
 /// from the original source at https://github.com/qulle/svg-wind-barbs. It has the following license:
-/// 
+///
 /// BSD 2-Clause License
 ///
 /// Copyright (c) 2021-present, Qulle
 /// All rights reserved.
-/// 
+///
 /// Redistribution and use in source and binary forms, with or without
 /// modification, are permitted provided that the following conditions are met:
-/// 
+///
 /// 1. Redistributions of source code must retain the above copyright notice, this
 ///    list of conditions and the following disclaimer.
-/// 
+///
 /// 2. Redistributions in binary form must reproduce the above copyright notice,
 ///    this list of conditions and the following disclaimer in the documentation
 ///    and/or other materials provided with the distribution.
-/// 
+///
 /// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 /// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 /// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -75,7 +75,7 @@ static BARB_PATHS: std::sync::LazyLock<HashMap<&str, &str>> = std::sync::LazyLoc
     ("knot190", "<path class=\"svg-wb\" transform-origin=\"125 125\" transform=\"translate({TRANSLATE}) rotate({ROTATE}) scale({SCALE})\" d=\"M125,112V18 M125,18h14l-14,14V18z M125,32h14l-14,14V32z M125,46h14l-14,14V46z M125,70l14-14 M125,80l14-14 M125,90l14-14 M125,100l14-14 M125,125l7-12.1h-14L125,125z\"/>"),
 ]));
 
-pub fn get_wind_barb_path(magnitude_ms_s: f64, rotate: f64, translate: (f64, f64), scale: f64) -> String {
+pub fn get_wind_barb_path(magnitude_ms_s: f32, rotate: f32, translate: (f32, f32), scale: f32) -> String {
     let knots = magnitude_ms_s * 1.9438445;
     let svg_path: String;
     if knots < 1.0 {
