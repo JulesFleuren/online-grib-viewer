@@ -1,9 +1,11 @@
+use log::debug;
+use colorgrad::Gradient;
 use grib::{GribError, GridDefinitionTemplateValues};
 use std::collections::HashMap;
 use std::fmt::{Write};
 
 use crate::windbarbs::get_wind_barb_path;
-use crate::projection::{epsg_3857_projection};
+use crate::projection::{epsg_3857_projection, inverse_epsg_3857_projection};
 
 pub struct SvgOverlay {
     pub svg_string: String,
@@ -12,6 +14,16 @@ pub struct SvgOverlay {
     pub min_lon: f32,
     pub max_lon: f32,
     pub max_zoom_level: i64,
+}
+
+pub struct ImageOverlay {
+    pub image: Vec<u8>,
+    pub width_px: usize,
+    pub height_px: usize,
+    pub min_lat: f32,
+    pub max_lat: f32,
+    pub min_lon: f32,
+    pub max_lon: f32,
 }
 
 pub fn generate_wind_barbs_svg_overlay(
@@ -85,6 +97,92 @@ pub fn generate_wind_barbs_svg_overlay(
 
 
     Ok(SvgOverlay {svg_string, min_lat, max_lat, min_lon, max_lon, max_zoom_level})
+}
+
+pub fn generate_heatmap_overlay(
+    grid: &GridDefinitionTemplateValues,
+    values: Vec<f32>,
+    pixels_per_cell: usize,
+) -> Result<ImageOverlay, GribError> {
+    let (lat_1d, lon_1d) = get_lat_lon_1d(grid)?;
+    let index_map = get_index_map(grid)?;
+
+    let n_lat = lat_1d.len();
+    let n_lon = lon_1d.len();
+
+
+    // add border of half a cell around the edge
+    // TODO: what if lat or lon only has 1 element?
+    if lat_1d.len() == 1 || lon_1d.len() == 1 {
+        todo!("lat or lon only has 1 element")
+    }
+
+    // corners of the overlay. The overlay extends half a cell beyond the corners of the grid.
+    let min_lat = lat_1d[0] - (lat_1d[1] - lat_1d[0]) / 2.0_f32;
+    let max_lat = lat_1d[lat_1d.len() - 1] + (lat_1d[lat_1d.len() - 1] - lat_1d[lat_1d.len() - 2]);
+    let min_lon = lon_1d[0] - (lon_1d[1] - lon_1d[0]) / 2.0_f32;
+    let max_lon = lon_1d[lon_1d.len() - 1] + (lon_1d[lon_1d.len() - 1] - lon_1d[lon_1d.len() - 2]);
+
+    let (min_x_overlay, min_y_overlay) = epsg_3857_projection(min_lat, min_lon);
+    let (max_x_overlay, max_y_overlay) = epsg_3857_projection(max_lat, max_lon);
+
+    let values_max = values.iter().filter(|&&x| !x.is_nan()).copied().reduce(f32::max).expect("values is empty");
+    let values_min = values.iter().filter(|&&x| !x.is_nan()).copied().reduce(f32::min).unwrap();
+
+    let width_px = n_lon * pixels_per_cell;
+    let height_px = n_lat * pixels_per_cell;
+
+    let width_single_pixel = (max_x_overlay - min_x_overlay) / (width_px as f32);
+    let height_single_pixel = (max_y_overlay - min_y_overlay) / (height_px as f32);
+
+    let mut image = Vec::with_capacity((width_px * height_px * 4) as usize);
+
+    let color_gradient = colorgrad::preset::turbo();
+
+    // variables used in loop
+    let (mut i, mut j) = (0, 0);
+    let (mut lat_0, mut lon_0, mut lat_1, mut lon_1) = (0_f32, 0_f32, 0_f32, 0_f32);
+    for i_px in 0..height_px {
+        for j_px in 0..width_px {
+            let x = min_x_overlay + (j_px as f32) * width_single_pixel + width_single_pixel * 0.5;
+            // y is reversed since images have origin at top left
+            let y = max_y_overlay - (i_px as f32) * height_single_pixel - height_single_pixel * 0.5;
+            let (lat, lon) = inverse_epsg_3857_projection(x, y);
+
+            // if point is still in the same gridcell, reuse the gridpoints of last iteration, otherwise recalculate
+            if lon_0 > lon || lon > lon_1 {
+                i = first_bigger_than(&lon_1d, lon);
+                lon_0 = lon_1d[i - 1];
+                lon_1 = lon_1d[i];
+            }
+            if lat_0 > lat || lat > lat_1 {
+                // lat_1d[j] is the smallest element that is bigger than lat
+                j = first_bigger_than(&lat_1d, lat);
+                lat_0 = lat_1d[j - 1];
+                lat_1 = lat_1d[j];
+            }
+
+            let idx_00 = *index_map.get(&(i-1, j-1)).unwrap();
+            let idx_01 = *index_map.get(&(i-1, j)).unwrap();
+            let idx_10 = *index_map.get(&(i, j-1)).unwrap();
+            let idx_11 = *index_map.get(&(i, j)).unwrap();
+
+            // perform bilinear interpolation (in lat-lon space)
+            let denominator = (lon_1 - lon_0) * (lat_1 - lat_0);
+            let w_00 = (lon_1 - lon) * (lat_1 - lat) / denominator;
+            let w_01 = (lon_1 - lon) * (lat - lat_0) / denominator;
+            let w_10 = (lon - lon_0) * (lat_1 - lat) / denominator;
+            let w_11 = (lon - lon_0) * (lat - lat_0) / denominator;
+
+            // interpolated value
+            let value = w_00 * values[idx_00] + w_01 * values[idx_01] + w_10 * values[idx_10] + w_11 * values[idx_11];
+            let color = color_gradient.at((value - values_min)/(values_max-values_min)).to_rgba8();
+
+            image.extend_from_slice(&color);
+        }
+    }
+
+    Ok(ImageOverlay { image, width_px, height_px, min_lat, max_lat, min_lon, max_lon })
 }
 
 fn index_step_and_scale_based_on_zoom(dx: f32, dy: f32, zoom_level: i64) -> (usize, f32, i64) {
@@ -161,11 +259,38 @@ fn get_index_map(grid: &GridDefinitionTemplateValues) -> Result<HashMap<(usize, 
     Ok(map)
 }
 
+/// Finds i such that sorted_vec[i-1] <= target <= sorted_vec[i]. When target is smaller than all elements in
+/// sorted_vec, it returns 1, when target is larger than all elements it returns sorted_vec.len() - 1. In this way,
+/// sorted_vec[i-1] and sorted_vec[i] always exist.
+fn first_bigger_than(sorted_vec: &[f32], target: f32) -> usize {
+    let index = sorted_vec.binary_search_by(|x| x.partial_cmp(&target).unwrap());
+    match index {
+        Ok(i) => {
+            // Perfect match: target is equal to sorted_vec[i]. Return i or 1 if i == 0
+            if i > 0 {
+                return i;
+            } else {
+                return 1_usize;
+            }
+        }
+        Err(i) => {
+            // If the target is not found, the first bigger element is at i.
+            if i >= sorted_vec.len() {
+                return i - 1;
+            } else if i == 0 {
+                return 1_usize;
+            } else {
+                return i;
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use grib::GridDefinitionTemplateValues;
 
-    use crate::overlays::{get_index_map, get_lat_lon_1d};
+    use crate::overlays::{first_bigger_than, get_index_map, get_lat_lon_1d};
 
 
     #[test]
@@ -204,5 +329,18 @@ mod tests {
         for (idx, (i, j)) in ij.enumerate() {
             assert_eq!(idx, *map.get(&(i, j)).expect(&format!("i: {}, j: {} not in map", i, j)));
         }
+    }
+
+    #[test]
+    fn test_first_bigger_than() {
+        let array = vec![1.0f32, 2.0f32, 3.0f32, 4.0f32];
+        assert_eq!(first_bigger_than(&array, 0.9f32), 1_usize);
+        assert_eq!(first_bigger_than(&array, 1.0f32), 1_usize);
+        assert_eq!(first_bigger_than(&array, 1.999f32), 1_usize);
+        assert_eq!(first_bigger_than(&array, 2.5f32), 2_usize);
+        assert_eq!(first_bigger_than(&array, 3.0f32), 2_usize);
+        assert_eq!(first_bigger_than(&array, 3.5f32), 3_usize);
+        assert_eq!(first_bigger_than(&array, 4.0f32), 3_usize);
+        assert_eq!(first_bigger_than(&array, 4.1f32), 3_usize);
     }
 }

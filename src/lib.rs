@@ -6,7 +6,7 @@ use js_sys::{Float32Array};
 use std::{collections::HashMap, error::Error};
 use std::collections::HashSet;
 
-use crate::overlays::generate_wind_barbs_svg_overlay;
+use crate::overlays::{generate_heatmap_overlay, generate_wind_barbs_svg_overlay};
 
 pub mod overlays;
 pub mod windbarbs;
@@ -233,6 +233,68 @@ pub fn wind_barb_overlay(bytes: &[u8], key_u: &str, key_v: &str, time: i64, zoom
     js_sys::Reflect::set(&result, &JsValue::from_str("maxZoomLevel"), &JsValue::from(svg_overlay.max_zoom_level)).unwrap();
 
     Ok(JsValue::from(result))
+}
+
+#[wasm_bindgen]
+pub fn heatmap_overlay(bytes: &[u8], key: &str, time: i64) -> Result<JsValue, JsValue> {
+    let pixels_per_cell = 3;
+    let param = grib_parameter_from_key(key)?;
+    let index = find_grib_index(bytes, param.0, param.1, param.2, time)?;
+
+    let (grid, values) = get_grid_and_values(bytes, index).expect("failed decoding u submessage");
+
+    let image_overlay = generate_heatmap_overlay(&grid, values, pixels_per_cell).expect("failed generating image overlay");
+
+    // Create a JS object with the arrays
+    let result = js_sys::Object::new();
+    js_sys::Reflect::set(&result, &JsValue::from_str("image"), &JsValue::from(image_overlay.image)).unwrap();
+    js_sys::Reflect::set(&result, &JsValue::from_str("width"), &JsValue::from(image_overlay.width_px)).unwrap();
+    js_sys::Reflect::set(&result, &JsValue::from_str("height"), &JsValue::from(image_overlay.height_px)).unwrap();
+    js_sys::Reflect::set(&result, &JsValue::from_str("minLat"), &JsValue::from(image_overlay.min_lat)).unwrap();
+    js_sys::Reflect::set(&result, &JsValue::from_str("maxLat"), &JsValue::from(image_overlay.max_lat)).unwrap();
+    js_sys::Reflect::set(&result, &JsValue::from_str("minLon"), &JsValue::from(image_overlay.min_lon)).unwrap();
+    js_sys::Reflect::set(&result, &JsValue::from_str("maxLon"), &JsValue::from(image_overlay.max_lon)).unwrap();
+
+    Ok(JsValue::from(result))
+}
+
+#[wasm_bindgen]
+pub fn magnitude_heatmap_overlay(bytes: &[u8], key_u: &str, key_v: &str, time: i64) -> Result<JsValue, JsValue> {
+    let pixels_per_cell = 3;
+    let param_u = grib_parameter_from_key(key_u)?;
+    let index_u = find_grib_index(bytes, param_u.0, param_u.1, param_u.2, time)?;
+    let param_v = grib_parameter_from_key(key_v)?;
+    let index_v = find_grib_index(bytes, param_v.0, param_v.1, param_v.2, time)?;
+
+    // it is assumed that u and v have the same grid
+    // TODO: should this be checked?
+    let (grid, u) = get_grid_and_values(bytes, index_u).expect("failed decoding u submessage");
+    let (_grid, v) = get_grid_and_values(bytes, index_v).expect("failed decoding v submessage");
+
+    let values = norm(&u, &v);
+
+    let image_overlay = generate_heatmap_overlay(&grid, values, pixels_per_cell).expect("failed generating image overlay");
+
+    // Create a JS object with the arrays
+    let result = js_sys::Object::new();
+    js_sys::Reflect::set(&result, &JsValue::from_str("image"), &JsValue::from(image_overlay.image)).unwrap();
+    js_sys::Reflect::set(&result, &JsValue::from_str("width"), &JsValue::from(image_overlay.width_px)).unwrap();
+    js_sys::Reflect::set(&result, &JsValue::from_str("height"), &JsValue::from(image_overlay.height_px)).unwrap();
+    js_sys::Reflect::set(&result, &JsValue::from_str("minLat"), &JsValue::from(image_overlay.min_lat)).unwrap();
+    js_sys::Reflect::set(&result, &JsValue::from_str("maxLat"), &JsValue::from(image_overlay.max_lat)).unwrap();
+    js_sys::Reflect::set(&result, &JsValue::from_str("minLon"), &JsValue::from(image_overlay.min_lon)).unwrap();
+    js_sys::Reflect::set(&result, &JsValue::from_str("maxLon"), &JsValue::from(image_overlay.max_lon)).unwrap();
+
+    Ok(JsValue::from(result))
+}
+
+fn norm(first_component: &Vec<f32>, second_component: &Vec<f32>) -> Vec<f32> {
+    // TODO: check if lengths match
+    let mut result = Vec::with_capacity(first_component.len());
+    for idx in 0..first_component.len() {
+        result.push(f32::sqrt(first_component[idx].powi(2) + second_component[idx].powi(2)));
+    }
+    result
 }
 
 fn find_closest_point_in_grid(lat: &Vec<f32>, lon: &Vec<f32>, query_lat: f32, query_lon: f32) -> usize {

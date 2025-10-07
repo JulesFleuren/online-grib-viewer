@@ -1,4 +1,4 @@
-import init, { get_available_parameters, get_vector_field, get_available_timestamps, get_scalar_field, get_grid_shape, query_grib_message_at_point, wind_barb_overlay } from './pkg/online_grib_viewer.js';
+import init, { get_available_parameters, get_vector_field, get_available_timestamps, get_scalar_field, get_grid_shape, query_grib_message_at_point, wind_barb_overlay, heatmap_overlay, magnitude_heatmap_overlay } from './pkg/online_grib_viewer.js';
 import { generateHeatMapCanvas, generateHeatMapSvg } from './map-overlays.js';
 
 // certain parameter pairs are known to be vector fields
@@ -15,7 +15,7 @@ let gribBytes = null;
 let parameters = [];
 let selectedParameter = null;
 let selectedTime = null;
-let adjustedBounds = null;
+let overlayBounds = null;
 
 function clearMap() {
   if (heatLayer) {
@@ -123,20 +123,27 @@ function displayVectorField(u_key, v_key, time) {
 
   clearMap();
 
-  // map.fitBounds(adjustedBounds);
+  const imageOverlay = magnitude_heatmap_overlay(gribBytes, u_key, v_key, BigInt(time));
+  const canvas = document.createElement('canvas');
+  canvas.width = imageOverlay.width;
+  canvas.height = imageOverlay.height;
+  const ctx = canvas.getContext('2d');
+  const imageData = new ImageData(new Uint8ClampedArray(imageOverlay.image), imageOverlay.width, imageOverlay.height);
+  ctx.putImageData(imageData, 0, 0);
+  const heatmapUrl = canvas.toDataURL();
 
-  // // Display a heatmap of the norm of the vector field
-  // const normValues = u.map((val, idx) => {
-  //   if (isNaN(val) || isNaN(v[idx])) return NaN;
-  //   return Math.sqrt(val*val + v[idx]*v[idx]);
-  // });
+  const heatmapBounds = [
+    [imageOverlay.minLat, imageOverlay.minLon],
+    [imageOverlay.maxLat, imageOverlay.maxLon],
+  ]
 
-  // const heatmapSvg = generateHeatMapSvg(nx, ny, lat, lon, normValues);
-  // heatLayer = L.svgOverlay(heatmapSvg.node(), adjustedBounds, {opacity: 0.6}).addTo(map);
+  heatLayer = L.imageOverlay(heatmapUrl, heatmapBounds, {opacity: 0.4}).addTo(map);
 
+  overlayBounds = heatmapBounds;
+  // map.fitBounds(overlayBounds);
 
   // generate wind barb overlay
-  const minZoomLevel = map.getBoundsZoom(adjustedBounds);
+  const minZoomLevel = map.getBoundsZoom(overlayBounds);
   let zoomLevel = map.getZoom();
   zoomLevel = Math.max(zoomLevel, minZoomLevel);
   const svgOverlay = wind_barb_overlay(gribBytes, u_key, v_key, BigInt(time), BigInt(zoomLevel));
@@ -145,14 +152,14 @@ function displayVectorField(u_key, v_key, time) {
 
   // Now display the wind barbs
   const svgBlob = new Blob([svgOverlay.svgString], { type: "image/svg+xml;charset=utf-8" });
-  const url = URL.createObjectURL(svgBlob);
+  const windBarbUrl = URL.createObjectURL(svgBlob);
 
-  const bounds = [
+  const windBarbBounds = [
     [svgOverlay.minLat, svgOverlay.minLon],
     [svgOverlay.maxLat, svgOverlay.maxLon],
   ]
 
-  arrowLayers.push(L.imageOverlay(url, bounds, {opacity: 1.0}).addTo(map));
+  arrowLayers.push(L.imageOverlay(windBarbUrl, windBarbBounds, {opacity: 1.0}).addTo(map));
 
   // build a cache of layers at different zoom levels
   arrowZoomLayers = {};
@@ -171,30 +178,24 @@ function displayVectorField(u_key, v_key, time) {
 }
 
 function displayHeatmap(key, time) {
-  const data = get_scalar_field(gribBytes, key, BigInt(time));
-  const shape = get_grid_shape(gribBytes, key);
-
-  const nx = shape.nx;
-  const ny = shape.ny;
-  const lat = data.lat;
-  const lon = data.lon;
-  const values = data.values;
   clearMap();
 
-  const bounds = [[Math.min(...lat), Math.min(...lon)], [Math.max(...lat), Math.max(...lon)]];
-  // the svg extends half a cellsize beyond the bounds, so we need to adjust the bounds accordingly
-  const cellSizeLat = (Math.max(...lat) - Math.min(...lat)) / ny;
-  const cellSizeLon = (Math.max(...lon) - Math.min(...lon)) / nx;
+  const imageOverlay = heatmap_overlay(gribBytes, key, BigInt(time));
+  const canvas = document.createElement('canvas');
+  canvas.width = imageOverlay.width;
+  canvas.height = imageOverlay.height;
+  const ctx = canvas.getContext('2d');
+  const imageData = new ImageData(new Uint8ClampedArray(imageOverlay.image), imageOverlay.width, imageOverlay.height);
+  ctx.putImageData(imageData, 0, 0);
+  const url = canvas.toDataURL();
 
-  adjustedBounds = [
-    [bounds[0][0] - cellSizeLat / 2, bounds[0][1] - cellSizeLon / 2],
-    [bounds[1][0] + cellSizeLat / 2, bounds[1][1] + cellSizeLon / 2]
-  ];
+  const bounds = [
+    [imageOverlay.minLat, imageOverlay.minLon],
+    [imageOverlay.maxLat, imageOverlay.maxLon],
+  ]
 
-  const svg = generateHeatMapSvg(nx, ny, lat, lon, values);
-
-  heatLayer = L.svgOverlay(svg.node(), adjustedBounds, {opacity: 0.6}).addTo(map);
-
+  heatLayer = L.imageOverlay(url, bounds, {opacity: 0.4}).addTo(map);
+  overlayBounds = bounds;
   // map.fitBounds(bounds);
 }
 
@@ -303,7 +304,7 @@ init().then(() => {
     const file = e.target.files[0];
     if (!file) return;
     await showParameterSelect(file);
-    map.fitBounds(adjustedBounds);
+    map.fitBounds(overlayBounds);
   });
 
   document.getElementById('parameterSelect').addEventListener('change', (e) => {
