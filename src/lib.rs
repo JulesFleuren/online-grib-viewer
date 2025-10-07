@@ -6,7 +6,8 @@ use js_sys::{Float32Array};
 use std::{collections::HashMap, error::Error};
 use std::collections::HashSet;
 
-use crate::overlays::{generate_heatmap_overlay, generate_wind_barbs_svg_overlay};
+use crate::overlays::{generate_heatmap_overlay, generate_vector_field_svg_overlay};
+use crate::windbarbs::ArrowType;
 
 pub mod overlays;
 pub mod windbarbs;
@@ -210,7 +211,9 @@ pub fn get_vector_field(bytes: &[u8], u_index: usize, v_index: usize, u_subindex
 }
 
 #[wasm_bindgen]
-pub fn wind_barb_overlay(bytes: &[u8], key_u: &str, key_v: &str, time: i64, zoom_level: i64) -> Result<JsValue, JsValue> {
+pub fn vector_field_overlay(bytes: &[u8], key_u: &str, key_v: &str, time: i64, zoom_level: i64, arrow_type: &str) -> Result<JsValue, JsValue> {
+    let arrow_type: ArrowType = serde_plain::from_str(arrow_type).unwrap();
+
     let param_u = grib_parameter_from_key(key_u)?;
     let index_u = find_grib_index(bytes, param_u.0, param_u.1, param_u.2, time)?;
     let param_v = grib_parameter_from_key(key_v)?;
@@ -221,7 +224,7 @@ pub fn wind_barb_overlay(bytes: &[u8], key_u: &str, key_v: &str, time: i64, zoom
     let (grid, u) = get_grid_and_values(bytes, index_u).expect("failed decoding u submessage");
     let (_grid, v) = get_grid_and_values(bytes, index_v).expect("failed decoding v submessage");
 
-    let svg_overlay = generate_wind_barbs_svg_overlay(&grid, u, v, zoom_level).expect("failed generating wind barb overlay");
+    let svg_overlay = generate_vector_field_svg_overlay(&grid, u, v, zoom_level, arrow_type).expect("failed generating wind barb overlay");
 
     // Create a JS object with the arrays
     let result = js_sys::Object::new();

@@ -1,4 +1,4 @@
-/// This file contains the SVG paths for different wind barb representations. It is modified
+/// This file contains SVG paths for different wind barb representations. It is modified
 /// from the original source at https://github.com/qulle/svg-wind-barbs. It has the following license:
 ///
 /// BSD 2-Clause License
@@ -29,10 +29,21 @@
 
 
 use std::collections::HashMap;
+use serde::Deserialize;
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub enum ArrowType {
+    PivotTip,
+    PivotCenter,
+    WindBarb,
+}
 
 // transform-origin is set to 125, 125 because the original SVGs are 250x250 and the wind barb is centered there
 // The placeholders {TRANSLATE}, {ROTATE}, and {SCALE} should be replaced with actual values when generating the final SVG
-static BARB_PATHS: std::sync::LazyLock<HashMap<&str, &str>> = std::sync::LazyLock::new(||HashMap::from([
+static ARROW_PATHS: std::sync::LazyLock<HashMap<&str, &str>> = std::sync::LazyLock::new(||HashMap::from([
+    ("arrow-pivot-center", "<path class=\"svg-wb\" transform-origin=\"125 125\" transform=\"translate({TRANSLATE}) rotate({ROTATE}) scale({SCALE})\" d=\"M125,135V102 M125,148l7-12.1h-14L125,148z\"/>"),
+    ("arrow-pivot-tip", "<path class=\"svg-wb\" transform-origin=\"125 125\" transform=\"translate({TRANSLATE}) rotate({ROTATE}) scale({SCALE})\" d=\"M125,112V76 M125,125l7-12.1h-14L125,125z\"/>"),
     ("knot0", "<path fill=\"#1A232D\" transform-origin=\"125 125\" transform=\"translate({TRANSLATE}) rotate({ROTATE}) scale({SCALE})\" d=\"M125,120c2.762,0,5,2.239,5,5c0,2.762-2.238,5-5,5c-2.761,0-5-2.238-5-5C120,122.239,122.239,120,125,120z\"/><path fill=\"none\" stroke=\"#1A232D\" stroke-width=\"2\" transform-origin=\"125 125\" transform=\"translate({TRANSLATE}) rotate({ROTATE}) scale({SCALE})\" d=\"M125,115c5.523,0,10,4.477,10,10c0,5.523-4.477,10-10,10 c-5.523,0-10-4.477-10-10C115,119.477,119.477,115,125,115z \"/>"),
     ("knot2", "<path class=\"svg-wb\" transform-origin=\"125 125\" transform=\"translate({TRANSLATE}) rotate({ROTATE}) scale({SCALE})\" d=\"M125,112V76 M125,125l7-12.1h-14L125,125z\"/>"),
     ("knot5", "<path class=\"svg-wb\" transform-origin=\"125 125\" transform=\"translate({TRANSLATE}) rotate({ROTATE}) scale({SCALE})\" d=\"M125,112V76 M125,89l7-7 M125,125l7-12.1h-14L125,125z\"/>"),
@@ -75,19 +86,29 @@ static BARB_PATHS: std::sync::LazyLock<HashMap<&str, &str>> = std::sync::LazyLoc
     ("knot190", "<path class=\"svg-wb\" transform-origin=\"125 125\" transform=\"translate({TRANSLATE}) rotate({ROTATE}) scale({SCALE})\" d=\"M125,112V18 M125,18h14l-14,14V18z M125,32h14l-14,14V32z M125,46h14l-14,14V46z M125,70l14-14 M125,80l14-14 M125,90l14-14 M125,100l14-14 M125,125l7-12.1h-14L125,125z\"/>"),
 ]));
 
-pub fn get_wind_barb_path(magnitude_ms_s: f32, rotate: f32, translate: (f32, f32), scale: f32) -> String {
-    let knots = magnitude_ms_s * 1.9438445;
-    let svg_path: String;
-    if knots < 1.0 {
-        svg_path = BARB_PATHS.get("knot0").unwrap().to_string();
-    } else if knots < 3.5 {
-        svg_path = BARB_PATHS.get("knot2").unwrap().to_string();
-    } else if knots >= 187.5 {
-        svg_path = BARB_PATHS.get("knot190").unwrap().to_string();
-    } else {
-        let rounded_knots = (knots / 5.0).round() * 5.0;
-        let key = format!("knot{}", rounded_knots as i32);
-        svg_path = BARB_PATHS.get(key.as_str()).unwrap_or(BARB_PATHS.get("knot0").unwrap()).to_string();
+pub fn get_arrow_path(arrow_type: &ArrowType, magnitude_ms_s: f32, rotate: f32, translate: (f32, f32), scale: f32) -> String {
+    let svg_path;
+    match arrow_type {
+        ArrowType::PivotCenter => {
+            svg_path = ARROW_PATHS.get("arrow-pivot-center").unwrap().to_string();
+        }
+        ArrowType::PivotTip => {
+            svg_path = ARROW_PATHS.get("arrow-pivot-tip").unwrap().to_string();
+        }
+        ArrowType::WindBarb => {
+            let knots = magnitude_ms_s * 1.9438445;
+            if knots < 1.0 {
+                svg_path = ARROW_PATHS.get("knot0").unwrap().to_string();
+            } else if knots < 3.5 {
+                svg_path = ARROW_PATHS.get("knot2").unwrap().to_string();
+            } else if knots >= 187.5 {
+                svg_path = ARROW_PATHS.get("knot190").unwrap().to_string();
+            } else {
+                let rounded_knots = (knots / 5.0).round() * 5.0;
+                let key = format!("knot{}", rounded_knots as i32);
+                svg_path = ARROW_PATHS.get(key.as_str()).unwrap_or(ARROW_PATHS.get("knot0").unwrap()).to_string();
+            }
+        }
     }
     svg_path.replace("{TRANSLATE}", &format!("{:.2} {:.2}", translate.0, translate.1))
         .replace("{ROTATE}", &format!("{:.2}", rotate))

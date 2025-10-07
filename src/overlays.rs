@@ -1,10 +1,9 @@
-use log::debug;
 use colorgrad::Gradient;
 use grib::{GribError, GridDefinitionTemplateValues};
 use std::collections::HashMap;
 use std::fmt::{Write};
 
-use crate::windbarbs::get_wind_barb_path;
+use crate::windbarbs::{get_arrow_path, ArrowType};
 use crate::projection::{epsg_3857_projection, inverse_epsg_3857_projection};
 
 pub struct SvgOverlay {
@@ -26,11 +25,12 @@ pub struct ImageOverlay {
     pub max_lon: f32,
 }
 
-pub fn generate_wind_barbs_svg_overlay(
+pub fn generate_vector_field_svg_overlay(
     grid: &GridDefinitionTemplateValues,
     u: Vec<f32>,
     v: Vec<f32>,
     zoom_level: i64,
+    arrow_type: ArrowType,
 ) -> Result<SvgOverlay, GribError> {
     // TODO: check if u and v both have the size as the grid
     let (lat_1d, lon_1d) = get_lat_lon_1d(grid)?;
@@ -89,7 +89,7 @@ pub fn generate_wind_barbs_svg_overlay(
 
             let (x, y) = epsg_3857_projection(lat_1d[j], lon_1d[i]);
 
-            let barb_path = get_wind_barb_path(magnitude, 180.0 + direction, (x, -y), scale);
+            let barb_path = get_arrow_path(&arrow_type, magnitude, 180.0 + direction, (x, -y), scale);
             svg_string.push_str(&barb_path);
         }
     }

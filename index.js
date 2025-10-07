@@ -1,11 +1,22 @@
-import init, { get_available_parameters, get_vector_field, get_available_timestamps, get_scalar_field, get_grid_shape, query_grib_message_at_point, wind_barb_overlay, heatmap_overlay, magnitude_heatmap_overlay } from './pkg/online_grib_viewer.js';
-import { generateHeatMapCanvas, generateHeatMapSvg } from './map-overlays.js';
+import init, { get_available_parameters,
+  get_available_timestamps,
+  query_grib_message_at_point,
+  vector_field_overlay,
+  heatmap_overlay,
+  magnitude_heatmap_overlay,
+  get_scalar_field} from './pkg/online_grib_viewer.js';
 
 // certain parameter pairs are known to be vector fields
 const PARAMETER_PAIRS = {
   'current': { u: "grib2_10_1_2", v: "grib2_10_1_3" },
   'wind': { u: "grib2_0_2_2", v: "grib2_0_2_3" },
 };
+
+const ArrowType = {
+  PIVOT_TIP: "PivotTip",
+  PIVOT_CENTER: "PivotCenter",
+  WIND_BARB: "WindBarb",
+}
 
 let map;
 let heatLayer;
@@ -146,7 +157,7 @@ function displayVectorField(u_key, v_key, time) {
   const minZoomLevel = map.getBoundsZoom(overlayBounds);
   let zoomLevel = map.getZoom();
   zoomLevel = Math.max(zoomLevel, minZoomLevel);
-  const svgOverlay = wind_barb_overlay(gribBytes, u_key, v_key, BigInt(time), BigInt(zoomLevel));
+  const svgOverlay = vector_field_overlay(gribBytes, u_key, v_key, BigInt(time), BigInt(zoomLevel), ArrowType.PIVOT_CENTER);
   const maxZoomLevel = svgOverlay.maxZoomLevel;
   zoomLevel = Math.min(zoomLevel, Number(maxZoomLevel));
 
@@ -169,10 +180,12 @@ function displayVectorField(u_key, v_key, time) {
     if (zl == zoomLevel) {
       continue
     }
-    const svgOverlay = wind_barb_overlay(gribBytes, u_key, v_key, BigInt(time), BigInt(zl));
+    const svgOverlay = vector_field_overlay(gribBytes, u_key, v_key, BigInt(time), BigInt(zl), ArrowType.WIND_BARB);
     arrowZoomLayers[zl] = svgOverlay;
   }
-  // markAllPoints(lat, lon);
+
+  // const data = get_scalar_field(gribBytes, u_key, BigInt(time));
+  // markAllPoints(data.lat, data.lon);
 
   // console.log(arrowZoomLayers);
 }
