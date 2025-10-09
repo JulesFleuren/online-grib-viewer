@@ -22,13 +22,23 @@
             <input class="input" type="file" id="fileInput" />
           </div>
         </div>
-        <div class="field" id="parameterField" style="display:none;">
-          <label class="label">Select parameter</label>
-          <div class="control">
-            <div class="select">
-              <select id="parameterSelect"></select>
+        <div class="columns" id="parameterField" style="display:none;">
+            <div class="column" id="vectorFieldParameterField">
+                <label class="label">Select vector field parameter</label>
+                <div class="control">
+                    <div class="select">
+                    <select id="vectorFieldParameterSelect"></select>
+                    </div>
+                </div>
             </div>
-          </div>
+            <div class="column" id="heatmapParameterField">
+                <label class="label">Select heat map parameter</label>
+                <div class="control">
+                    <div class="select">
+                    <select id="heatMapParameterSelect"></select>
+                    </div>
+                </div>
+            </div>
         </div>
         <div class="field" id="timestampField" style="display:none;">
           <label class="label">Select Timestamp</label>
