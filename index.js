@@ -440,7 +440,7 @@ init().then(() => {
       const option = document.getElementById("magnitudeVectorFieldOption").disabled = false;
       showTimeSelect(selectedVFParameter);
     } else {
-      if  (selectedHMParameter != "magnitudeVectorField") {
+      if  (selectedHMParameter == "magnitudeVectorField") {
         document.getElementById('heatMapParameterSelect').value = "None";
       }
       const option = document.getElementById("magnitudeVectorFieldOption").disabled = true;
