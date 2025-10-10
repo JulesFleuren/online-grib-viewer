@@ -1,8 +1,9 @@
 use colorgrad::Gradient;
-use grib::{GribError, GridDefinitionTemplateValues};
+use grib::{GridDefinitionTemplateValues};
 use std::collections::HashMap;
 use std::fmt::{Write};
 
+use crate::error::GribViewerError;
 use crate::windbarbs::{get_arrow_path, ArrowType};
 use crate::projection::{epsg_3857_projection, inverse_epsg_3857_projection};
 
@@ -31,14 +32,13 @@ pub fn generate_vector_field_svg_overlay(
     v: Vec<f32>,
     zoom_level: i64,
     arrow_type: ArrowType,
-) -> Result<SvgOverlay, GribError> {
+) -> Result<SvgOverlay, GribViewerError> {
     // TODO: check if u and v both have the size as the grid
     let (lat_1d, lon_1d) = get_lat_lon_1d(grid)?;
     let index_map = get_index_map(grid)?;
 
     let n_lat = lat_1d.len();
     let n_lon = lon_1d.len();
-
 
     // add border of half a cell around the edge
     // TODO: what if lat or lon only has 1 element?
@@ -103,18 +103,25 @@ pub fn generate_heatmap_overlay(
     grid: &GridDefinitionTemplateValues,
     values: Vec<f32>,
     pixels_per_cell: usize,
-) -> Result<ImageOverlay, GribError> {
+) -> Result<ImageOverlay, GribViewerError> {
     let (lat_1d, lon_1d) = get_lat_lon_1d(grid)?;
     let index_map = get_index_map(grid)?;
 
     let n_lat = lat_1d.len();
     let n_lon = lon_1d.len();
 
+    if n_lat == 0 || n_lon == 0 {
+        return Err(GribViewerError::Other("Empty grid".into()));
+    }
 
     // add border of half a cell around the edge
     // TODO: what if lat or lon only has 1 element?
     if lat_1d.len() == 1 || lon_1d.len() == 1 {
         todo!("lat or lon only has 1 element")
+    }
+
+    if values.len() != n_lat * n_lon {
+        return Err(GribViewerError::Other("Length of values is not the same as grid size".into()));
     }
 
     // corners of the overlay. The overlay extends half a cell beyond the corners of the grid.
@@ -126,7 +133,7 @@ pub fn generate_heatmap_overlay(
     let (min_x_overlay, min_y_overlay) = epsg_3857_projection(min_lat, min_lon);
     let (max_x_overlay, max_y_overlay) = epsg_3857_projection(max_lat, max_lon);
 
-    let values_max = values.iter().filter(|&&x| !x.is_nan()).copied().reduce(f32::max).expect("values is empty");
+    let values_max = values.iter().filter(|&&x| !x.is_nan()).copied().reduce(f32::max).unwrap();
     let values_min = values.iter().filter(|&&x| !x.is_nan()).copied().reduce(f32::min).unwrap();
 
     let width_px = n_lon * pixels_per_cell;
@@ -162,10 +169,10 @@ pub fn generate_heatmap_overlay(
                 lat_1 = lat_1d[j];
             }
 
-            let idx_00 = *index_map.get(&(i-1, j-1)).unwrap();
-            let idx_01 = *index_map.get(&(i-1, j)).unwrap();
-            let idx_10 = *index_map.get(&(i, j-1)).unwrap();
-            let idx_11 = *index_map.get(&(i, j)).unwrap();
+            let idx_00 = *index_map.get(&(i-1, j-1)).expect("indices are not valid");
+            let idx_01 = *index_map.get(&(i-1, j)).expect("indices are not valid");
+            let idx_10 = *index_map.get(&(i, j-1)).expect("indices are not valid");
+            let idx_11 = *index_map.get(&(i, j)).expect("indices are not valid");
 
             // perform bilinear interpolation (in lat-lon space)
             let denominator = (lon_1 - lon_0) * (lat_1 - lat_0);
@@ -202,7 +209,7 @@ fn index_step_and_scale_based_on_zoom(dx: f32, dy: f32, zoom_level: i64) -> (usi
 
 fn get_lat_lon_1d(
     grid: &GridDefinitionTemplateValues,
-) -> Result<(Vec<f32>, Vec<f32>), GribError> {
+) -> Result<(Vec<f32>, Vec<f32>), GribViewerError> {
     match grid {
         GridDefinitionTemplateValues::Template0(grid) => {
             // TODO: extracting the 1d lats and lons is convoluted, but there doesn't seem to be an easy way to do it.
@@ -224,12 +231,11 @@ fn get_lat_lon_1d(
             return Ok((lat, lon));
         }
         GridDefinitionTemplateValues::Template20(_) => {
-            // Polar stereographic logic here
-            unimplemented!("1d lat/lon not implemented for Lambert grid")
+            return Err(GribViewerError::Other("1d lat/lon not implemented for Polar Stereographic grid".into()));
         }
         GridDefinitionTemplateValues::Template30(_) => {
             // Lambert grid logic here
-            unimplemented!("1d lat/lon not implemented for Lambert grid")
+            return Err(GribViewerError::Other("1d lat/lon not implemented for Lambert grid".into()));
         }
         GridDefinitionTemplateValues::Template40(grid) => {
             let latlons = grid.latlons()?;
@@ -249,7 +255,7 @@ fn get_lat_lon_1d(
     }
 }
 
-fn get_index_map(grid: &GridDefinitionTemplateValues) -> Result<HashMap<(usize, usize), usize>, GribError> {
+fn get_index_map(grid: &GridDefinitionTemplateValues) -> Result<HashMap<(usize, usize), usize>, GribViewerError> {
     // TODO: can this be done without a HashMap, but with a formula?
     let (ni, nj) = grid.grid_shape();
     let mut map: HashMap<(usize, usize), usize> = HashMap::with_capacity(ni * nj);
