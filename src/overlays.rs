@@ -7,7 +7,7 @@ use crate::error::GribViewerError;
 use crate::windbarbs::{get_arrow_path, ArrowType};
 use crate::projection::{epsg_3857_projection, inverse_epsg_3857_projection};
 
-pub struct SvgOverlay {
+pub(crate) struct SvgOverlay {
     pub svg_string: String,
     pub min_lat: f32,
     pub max_lat: f32,
@@ -16,7 +16,7 @@ pub struct SvgOverlay {
     pub max_zoom_level: i64,
 }
 
-pub struct ImageOverlay {
+pub(crate) struct ImageOverlay {
     pub image: Vec<u8>,
     pub width_px: usize,
     pub height_px: usize,
@@ -26,7 +26,7 @@ pub struct ImageOverlay {
     pub max_lon: f32,
 }
 
-pub fn generate_vector_field_svg_overlay(
+pub(crate) fn generate_vector_field_svg_overlay(
     grid: &GridDefinitionTemplateValues,
     u: Vec<f32>,
     v: Vec<f32>,
@@ -99,7 +99,7 @@ pub fn generate_vector_field_svg_overlay(
     Ok(SvgOverlay {svg_string, min_lat, max_lat, min_lon, max_lon, max_zoom_level})
 }
 
-pub fn generate_heatmap_overlay(
+pub(crate) fn generate_heatmap_overlay(
     grid: &GridDefinitionTemplateValues,
     values: Vec<f32>,
     pixels_per_cell: usize,

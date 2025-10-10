@@ -40,6 +40,13 @@ where
     (lat, lon)
 }
 
+/// Distance (meters) between two points (latitude and longitude in degrees)
+pub fn haversine_distance(lat1: f32, lon1: f32, lat2: f32, lon2: f32) -> f32 {
+    let a = ((lat2 - lat1) / 2.0).to_radians().sin().powi(2)
+        + lat1.to_radians().cos() * lat2.to_radians().cos() * ((lon2 - lon1) / 2.0).to_radians().sin().powi(2);
+    2.0 * f32::from_f64(EARTH_RADIUS).unwrap() * a.sqrt().asin()
+}
+
 #[cfg(test)]
 mod tests {
     use crate::projection::{epsg_3857_projection, inverse_epsg_3857_projection};

@@ -1,4 +1,3 @@
-use grib::{GridDefinitionTemplateValues};
 use log::warn;
 use wasm_bindgen::prelude::*;
 use console_error_panic_hook;
@@ -7,14 +6,18 @@ use js_sys::{Float32Array};
 use std::{collections::HashMap};
 use std::collections::HashSet;
 
-use crate::error::GribViewerError;
-use crate::overlays::{generate_heatmap_overlay, generate_vector_field_svg_overlay};
-use crate::windbarbs::ArrowType;
+use crate::error::*;
+use crate::overlays::*;
+use crate::windbarbs::*;
+use crate::grib_helpers::*;
+use crate::math::*;
 
 pub mod overlays;
 pub mod windbarbs;
 pub mod projection;
 pub mod error;
+pub mod grib_helpers;
+pub mod math;
 
 #[wasm_bindgen(start)]
 pub fn init() {
@@ -123,31 +126,6 @@ pub fn query_grib_message_at_point(bytes: &[u8], key: &str, time: i64, query_lat
     Ok(JsValue::from(return_value))
 }
 
-fn find_grib_index(bytes: &[u8], discipline: u8, category: u8, parameter: u8, time: i64) -> Result<(usize, usize), GribViewerError> {
-    let grib2 = grib::from_bytes(bytes)?;
-    for ((index, subindex), message) in grib2.iter() {
-        let d = message.indicator().discipline;
-        let prod_def = message.prod_def();
-        let Some(c) = prod_def.parameter_category() else {
-            warn!("Unsupported product definition template number: {}, skipping message", prod_def.prod_tmpl_num());
-            continue;
-            };
-        let p = prod_def.parameter_number().expect("parameter_category() should have failed");
-
-        let temporal_info = grib::TemporalInfo::from(&message.temporal_raw_info());
-        let Some(t) = temporal_info.forecast_time_target else {
-            warn!("Message with invalid forecast time, skipping message {:?}", index);
-            continue;
-        };
-
-        if d == discipline && c == category && p == parameter && t.timestamp() == time {
-            return Ok((index, subindex));
-        }
-    }
-    Err(GribViewerError::MessageNotFound(format!(
-        "No message with: disc: {}, cat: {}, param: {}, time: {}", discipline, category, parameter, time)))
-}
-
 #[wasm_bindgen]
 pub fn get_scalar_field(bytes: &[u8], key: &str, time: i64) -> Result<JsValue, JsValue> {
     let (discipline, category, parameter) = grib_parameter_from_key(key)?;
@@ -248,117 +226,4 @@ pub fn magnitude_heatmap_overlay(bytes: &[u8], key_u: &str, key_v: &str, time: i
     js_sys::Reflect::set(&result, &JsValue::from_str("maxLon"), &JsValue::from(image_overlay.max_lon)).expect("failed to set maxLon");
 
     Ok(JsValue::from(result))
-}
-
-fn norm(first_component: &Vec<f32>, second_component: &Vec<f32>) -> Vec<f32> {
-    // TODO: check if lengths match
-    let mut result = Vec::with_capacity(first_component.len());
-    for idx in 0..first_component.len() {
-        result.push(f32::sqrt(first_component[idx].powi(2) + second_component[idx].powi(2)));
-    }
-    result
-}
-
-fn find_closest_point_in_grid(lat: &Vec<f32>, lon: &Vec<f32>, query_lat: f32, query_lon: f32) -> usize {
-    let mut closest_point_index = 0;
-    let mut closest_distance = f32::MAX;
-    for (i, (lat, lon)) in lat.iter().zip(lon.iter()).enumerate() {
-        // Calculate the distance to the query point
-
-        let distance = haversine_distance(*lat, *lon, query_lat, query_lon);
-        // Update the closest point if this one is closer
-        if distance < closest_distance {
-            closest_distance = distance;
-            closest_point_index = i;
-        }
-    }
-    closest_point_index
-}
-
-fn get_grid_and_values(
-    byte_string: &[u8],
-    message_index: (usize, usize)
-) -> Result<(GridDefinitionTemplateValues, Vec<f32>), GribViewerError> {
-    // Parse the GRIB2 message.
-    let grib2 = grib::from_bytes(byte_string)?;
-
-    // Find the target submessage.
-    let (_index, submessage) = grib2
-        .iter()
-        .find(|(index, _)| *index == message_index)
-        .ok_or_else(|| GribViewerError::MessageNotFound(format!("Index {:?} not found in Grib file", message_index)))?;
-
-    let grid_def = submessage.grid_def();
-    let grid = GridDefinitionTemplateValues::try_from(grid_def)?;
-
-    // Prepare a decoder.
-    let decoder = grib::Grib2SubmessageDecoder::from(submessage)?;
-
-    // Actually dispatch a decoding process and get an iterator of decoded values.
-    // There are various methods available for compressing GRIB2 data, but some are
-    // not yet supported by this library and may return errors.
-    let values_iterator = decoder.dispatch()?;
-
-    // extract values from iterator
-    let values = values_iterator
-        .collect();
-
-    Ok((grid, values))
-}
-
-fn get_lat_lon_and_values(byte_string: &[u8], message_index: (usize, usize)) -> Result<(Vec<f32>, Vec<f32>, Vec<f32>), GribViewerError>
-{
-    // Parse the GRIB2 message.
-    let grib2 = grib::from_bytes(byte_string)?;
-
-    // Find the target submessage.
-    let (_index, submessage) = grib2
-        .iter()
-        .find(|(index, _)| *index == message_index)
-        .ok_or_else(|| GribViewerError::MessageNotFound(format!("Index {:?} not found in Grib file", message_index)))?;
-
-    // Obtain latitude-longitude locations as an iterator.
-    let latlons = submessage.latlons()?;
-
-    // create array with lats and lons
-    let (lats, lons): (Vec<f32>, Vec<f32>) = latlons.unzip();
-
-    // Prepare a decoder.
-    let decoder = grib::Grib2SubmessageDecoder::from(submessage)?;
-
-    // Actually dispatch a decoding process and get an iterator of decoded values.
-    // There are various methods available for compressing GRIB2 data, but some are
-    // not yet supported by this library and may return errors.
-    let values_iterator = decoder.dispatch()?;
-
-    // extract values from iterator
-    let values = values_iterator
-        .collect();
-
-
-    Ok((lats, lons, values))
-}
-
-// Distance (meters) between two points (latitude and longitude in degrees)
-fn haversine_distance(lat1: f32, lon1: f32, lat2: f32, lon2: f32) -> f32 {
-    const EARTH_RADIUS: f32 = 6371008.7714;
-
-    let a = ((lat2 - lat1) / 2.0).to_radians().sin().powi(2)
-        + lat1.to_radians().cos() * lat2.to_radians().cos() * ((lon2 - lon1) / 2.0).to_radians().sin().powi(2);
-    2.0 * EARTH_RADIUS * a.sqrt().asin()
-}
-
-fn grib_parameter_from_key(key: &str) -> Result<(u8, u8, u8), GribViewerError> {
-    let parts: Vec<&str> = key.split('_').collect();
-    if parts.len() != 4 || parts[0] != "grib2" {
-        return Err(GribViewerError::InvalidKey(
-            "invalid key format, expected 'grib2_<discipline>_<category>_<parameter>'".to_string()));
-    }
-    let discipline: u8 = parts[1].parse()
-        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse discipline: {}", e)))?;
-    let category: u8 = parts[2].parse()
-        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse category: {}", e)))?;
-    let parameter: u8 = parts[3].parse()
-        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse parameter: {}", e)))?;
-    Ok((discipline, category, parameter))
 }
