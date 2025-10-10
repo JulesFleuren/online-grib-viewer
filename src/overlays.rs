@@ -1,5 +1,6 @@
 use colorgrad::Gradient;
 use grib::{GridDefinitionTemplateValues};
+use serde::Serialize;
 use std::collections::HashMap;
 use std::fmt::{Write};
 
@@ -7,6 +8,8 @@ use crate::error::GribViewerError;
 use crate::windbarbs::{get_arrow_path, ArrowType};
 use crate::projection::{epsg_3857_projection, inverse_epsg_3857_projection};
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct SvgOverlay {
     pub svg_string: String,
     pub min_lat: f32,
@@ -16,6 +19,8 @@ pub(crate) struct SvgOverlay {
     pub max_zoom_level: i64,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct ImageOverlay {
     pub image: Vec<u8>,
     pub width_px: usize,

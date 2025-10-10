@@ -242,10 +242,10 @@ function displayHeatmap(key, time) {
   }
 
   const canvas = document.createElement('canvas');
-  canvas.width = imageOverlay.width;
-  canvas.height = imageOverlay.height;
+  canvas.width = imageOverlay.widthPx;
+  canvas.height = imageOverlay.heightPx;
   const ctx = canvas.getContext('2d');
-  const imageData = new ImageData(new Uint8ClampedArray(imageOverlay.image), imageOverlay.width, imageOverlay.height);
+  const imageData = new ImageData(new Uint8ClampedArray(imageOverlay.image), imageOverlay.widthPx, imageOverlay.heightPx);
   ctx.putImageData(imageData, 0, 0);
   const url = canvas.toDataURL();
 

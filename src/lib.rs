@@ -163,16 +163,7 @@ pub fn vector_field_overlay(bytes: &[u8], key_u: &str, key_v: &str, time: i64, z
 
     let svg_overlay = generate_vector_field_svg_overlay(&grid, u, v, zoom_level, arrow_type)?;
 
-    // Create a JS object with the arrays
-    let result = js_sys::Object::new();
-    js_sys::Reflect::set(&result, &JsValue::from_str("svgString"), &JsValue::from(svg_overlay.svg_string)).expect("failed to set svgString");
-    js_sys::Reflect::set(&result, &JsValue::from_str("minLat"), &JsValue::from(svg_overlay.min_lat)).expect("failed to set minLat");
-    js_sys::Reflect::set(&result, &JsValue::from_str("maxLat"), &JsValue::from(svg_overlay.max_lat)).expect("failed to set maxLat");
-    js_sys::Reflect::set(&result, &JsValue::from_str("minLon"), &JsValue::from(svg_overlay.min_lon)).expect("failed to set minLon");
-    js_sys::Reflect::set(&result, &JsValue::from_str("maxLon"), &JsValue::from(svg_overlay.max_lon)).expect("failed to set maxLon");
-    js_sys::Reflect::set(&result, &JsValue::from_str("maxZoomLevel"), &JsValue::from(svg_overlay.max_zoom_level)).expect("failed to set maxZoomLevel");
-
-    Ok(JsValue::from(result))
+    Ok(serde_wasm_bindgen::to_value(&svg_overlay)?)
 }
 
 #[wasm_bindgen]
@@ -185,17 +176,7 @@ pub fn heatmap_overlay(bytes: &[u8], key: &str, time: i64) -> Result<JsValue, Js
 
     let image_overlay = generate_heatmap_overlay(&grid, values, pixels_per_cell)?;
 
-    // Create a JS object with the arrays
-    let result = js_sys::Object::new();
-    js_sys::Reflect::set(&result, &JsValue::from_str("image"), &JsValue::from(image_overlay.image)).expect("failed to set image");
-    js_sys::Reflect::set(&result, &JsValue::from_str("width"), &JsValue::from(image_overlay.width_px)).expect("failed to set width");
-    js_sys::Reflect::set(&result, &JsValue::from_str("height"), &JsValue::from(image_overlay.height_px)).expect("failed to set height");
-    js_sys::Reflect::set(&result, &JsValue::from_str("minLat"), &JsValue::from(image_overlay.min_lat)).expect("failed to set minLat");
-    js_sys::Reflect::set(&result, &JsValue::from_str("maxLat"), &JsValue::from(image_overlay.max_lat)).expect("failed to set maxLat");
-    js_sys::Reflect::set(&result, &JsValue::from_str("minLon"), &JsValue::from(image_overlay.min_lon)).expect("failed to set minLon");
-    js_sys::Reflect::set(&result, &JsValue::from_str("maxLon"), &JsValue::from(image_overlay.max_lon)).expect("failed to set maxLon");
-
-    Ok(JsValue::from(result))
+    Ok(serde_wasm_bindgen::to_value(&image_overlay)?)
 }
 
 #[wasm_bindgen]
@@ -215,15 +196,5 @@ pub fn magnitude_heatmap_overlay(bytes: &[u8], key_u: &str, key_v: &str, time: i
 
     let image_overlay = generate_heatmap_overlay(&grid, values, pixels_per_cell)?;
 
-    // Create a JS object with the arrays
-    let result = js_sys::Object::new();
-    js_sys::Reflect::set(&result, &JsValue::from_str("image"), &JsValue::from(image_overlay.image)).expect("failed to set image");
-    js_sys::Reflect::set(&result, &JsValue::from_str("width"), &JsValue::from(image_overlay.width_px)).expect("failed to set width");
-    js_sys::Reflect::set(&result, &JsValue::from_str("height"), &JsValue::from(image_overlay.height_px)).expect("failed to set height");
-    js_sys::Reflect::set(&result, &JsValue::from_str("minLat"), &JsValue::from(image_overlay.min_lat)).expect("failed to set minLat");
-    js_sys::Reflect::set(&result, &JsValue::from_str("maxLat"), &JsValue::from(image_overlay.max_lat)).expect("failed to set maxLat");
-    js_sys::Reflect::set(&result, &JsValue::from_str("minLon"), &JsValue::from(image_overlay.min_lon)).expect("failed to set minLon");
-    js_sys::Reflect::set(&result, &JsValue::from_str("maxLon"), &JsValue::from(image_overlay.max_lon)).expect("failed to set maxLon");
-
-    Ok(JsValue::from(result))
+    Ok(serde_wasm_bindgen::to_value(&image_overlay)?)
 }
