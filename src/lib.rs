@@ -23,43 +23,6 @@ pub fn init() {
 }
 
 #[wasm_bindgen]
-pub fn get_messages(bytes: &[u8]) -> Result<Vec<JsValue>, JsValue> {
-    let grib2 = grib::from_bytes(bytes).map_err(|e| GribViewerError::from(e))?;
-    let mut messages: Vec<JsValue> = Vec::new();
-    for (index, message) in grib2.iter() {
-        let discipline = message.indicator().discipline;
-        let prod_def = message.prod_def();
-        let Some(category) = prod_def.parameter_category() else {
-            warn!("Unsupported product definition template number: {}, skipping message", prod_def.prod_tmpl_num());
-            continue;
-            };
-        // prod_def.parameter_number only returns None when prod_def.parameter_category also returns None, in which
-        // case this statement is not reached.
-        let parameter = prod_def.parameter_number().expect("parameter_category() should have failed");
-
-        let parameter_name = CodeTable4_2::new(discipline, category).lookup(usize::from(parameter));
-
-        let temporal_info = grib::TemporalInfo::from(&message.temporal_raw_info());
-        let Some(forecast_date_time) = temporal_info.forecast_time_target else {
-            warn!("Message with invalid forecast time, skipping message {:?}", index);
-            continue;
-        };
-        let forecast_time = forecast_date_time.time();
-        let forecast_date = forecast_date_time.date_naive();
-
-        let result_message = js_sys::Object::new();
-        js_sys::Reflect::set(&result_message, &JsValue::from_str("index0"), &JsValue::from(index.0)).expect("failed to set index0");
-        js_sys::Reflect::set(&result_message, &JsValue::from_str("index1"), &JsValue::from(index.1)).expect("failed to set index1");
-        js_sys::Reflect::set(&result_message, &JsValue::from_str("name"), &JsValue::from(parameter_name.to_string())).expect("failed to set name");
-        js_sys::Reflect::set(&result_message, &JsValue::from_str("category"), &JsValue::from(category.to_string())).expect("failed to set category");
-        js_sys::Reflect::set(&result_message, &JsValue::from_str("forecast_time"), &JsValue::from(forecast_time.to_string())).expect("failed to set forecast_time");
-        js_sys::Reflect::set(&result_message, &JsValue::from_str("forecast_date"), &JsValue::from(forecast_date.to_string())).expect("failed to set forecast_date");
-        messages.push(JsValue::from(result_message));
-    }
-    Ok(messages)
-}
-
-#[wasm_bindgen]
 pub fn get_available_parameters(bytes: &[u8]) -> Result<Vec<JsValue>, JsValue> {
     let grib2 = grib::from_bytes(bytes).map_err(|e| GribViewerError::from(e))?;
     let mut parameters: HashMap<String, (u8, u8, u8)> = HashMap::new();
@@ -149,7 +112,7 @@ pub fn query_grib_message_at_point(bytes: &[u8], key: &str, time: i64, query_lat
 
     let (index, subindex) = find_grib_index(bytes, discipline, category, parameter, time)
         .map_err(|e| JsValue::from(e))?;
-    let (lat, lon, values) = decode_layer(bytes, (index, subindex))?;
+    let (lat, lon, values) = get_lat_lon_and_values(bytes, (index, subindex))?;
 
     let nearest_point_index = find_closest_point_in_grid(&lat, &lon, query_lat, query_lon);
 
@@ -190,7 +153,7 @@ pub fn get_scalar_field(bytes: &[u8], key: &str, time: i64) -> Result<JsValue, J
     let (discipline, category, parameter) = grib_parameter_from_key(key)?;
 
     let (index, subindex) = find_grib_index(bytes, discipline, category, parameter, time)?;
-    let (lat, lon, values) = decode_layer(bytes, (index, subindex))?;
+    let (lat, lon, values) = get_lat_lon_and_values(bytes, (index, subindex))?;
     // Convert Rust Vec<f32> to JS Float32Array
     let lat = Float32Array::from(lat.as_slice());
     let lon = Float32Array::from(lon.as_slice());
@@ -203,27 +166,6 @@ pub fn get_scalar_field(bytes: &[u8], key: &str, time: i64) -> Result<JsValue, J
     js_sys::Reflect::set(&result, &JsValue::from_str("values"), &values).expect("failed to set values");
 
     Ok(JsValue::from(result))
-}
-
-#[wasm_bindgen]
-pub fn get_vector_field(bytes: &[u8], u_index: usize, v_index: usize, u_subindex: usize, v_subindex: usize) -> JsValue {
-    let (lat, lon, u) = decode_layer(bytes, (u_index, u_subindex)).unwrap();
-    let (_, _, v) = decode_layer(bytes, (v_index, v_subindex)).unwrap();
-
-    // Convert Rust Vec<f32> to JS Float32Array
-    let lat = Float32Array::from(lat.as_slice());
-    let lon = Float32Array::from(lon.as_slice());
-    let u = Float32Array::from(u.as_slice());
-    let v = Float32Array::from(v.as_slice());
-
-    // Create a JS object with the arrays
-    let result = js_sys::Object::new();
-    js_sys::Reflect::set(&result, &JsValue::from_str("lat"), &lat).unwrap();
-    js_sys::Reflect::set(&result, &JsValue::from_str("lon"), &lon).unwrap();
-    js_sys::Reflect::set(&result, &JsValue::from_str("u"), &u).unwrap();
-    js_sys::Reflect::set(&result, &JsValue::from_str("v"), &v).unwrap();
-
-    JsValue::from(result)
 }
 
 #[wasm_bindgen]
@@ -364,7 +306,7 @@ fn get_grid_and_values(
     Ok((grid, values))
 }
 
-fn decode_layer(byte_string: &[u8], message_index: (usize, usize)) -> Result<(Vec<f32>, Vec<f32>, Vec<f32>), GribViewerError>
+fn get_lat_lon_and_values(byte_string: &[u8], message_index: (usize, usize)) -> Result<(Vec<f32>, Vec<f32>, Vec<f32>), GribViewerError>
 {
     // Parse the GRIB2 message.
     let grib2 = grib::from_bytes(byte_string)?;
