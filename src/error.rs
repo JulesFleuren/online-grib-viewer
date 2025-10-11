@@ -3,7 +3,6 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 use wasm_bindgen::prelude::*;
 
-
 #[derive(Debug)]
 pub enum GribViewerError {
     Grib(grib::GribError),

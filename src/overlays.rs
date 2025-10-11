@@ -1,13 +1,13 @@
 use colorgrad::Gradient;
-use grib::{GridDefinitionTemplateValues};
+use grib::GridDefinitionTemplateValues;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::f32;
-use std::fmt::{Write};
+use std::fmt::Write;
 
 use crate::error::GribViewerError;
-use crate::windbarbs::{get_arrow_path, ArrowType};
 use crate::projection::{epsg_3857_projection, inverse_epsg_3857_projection};
+use crate::windbarbs::{ArrowType, get_arrow_path};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -20,7 +20,9 @@ pub struct HeatmapOverlaySettings {
     pub pixels_per_point: usize,
 }
 
-fn default_pixels_per_point() -> usize {3}
+fn default_pixels_per_point() -> usize {
+    3
+}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -93,29 +95,38 @@ pub(crate) fn generate_vector_field_svg_overlay(
         height,
     ).unwrap();
 
-
-    let (index_step, scale, max_zoom_level) = index_step_and_scale_based_on_zoom(avg_dx, avg_dy, zoom_level);
+    let (index_step, scale, max_zoom_level) =
+        index_step_and_scale_based_on_zoom(avg_dx, avg_dy, zoom_level);
 
     for i in (0..n_lon).step_by(index_step) {
         for j in (0..n_lat).step_by(index_step) {
             let idx = index_map.get(&(i, j)).unwrap();
             let u_val = u[*idx];
             let v_val = v[*idx];
-            if u_val.is_nan() || v_val.is_nan() { continue; }
+            if u_val.is_nan() || v_val.is_nan() {
+                continue;
+            }
 
             let magnitude = (u_val.powi(2) + v_val.powi(2)).sqrt();
             let direction = 90.0 - v_val.atan2(u_val).to_degrees();
 
             let (x, y) = epsg_3857_projection(lat_1d[j], lon_1d[i]);
 
-            let barb_path = get_arrow_path(&arrow_type, magnitude, 180.0 + direction, (x, -y), scale);
+            let barb_path =
+                get_arrow_path(&arrow_type, magnitude, 180.0 + direction, (x, -y), scale);
             svg_string.push_str(&barb_path);
         }
     }
     svg_string.push_str("</svg>");
 
-
-    Ok(SvgOverlay {svg_string, min_lat, max_lat, min_lon, max_lon, max_zoom_level})
+    Ok(SvgOverlay {
+        svg_string,
+        min_lat,
+        max_lat,
+        min_lon,
+        max_lon,
+        max_zoom_level,
+    })
 }
 
 pub(crate) fn generate_heatmap_overlay(
@@ -140,7 +151,9 @@ pub(crate) fn generate_heatmap_overlay(
     }
 
     if values.len() != n_lat * n_lon {
-        return Err(GribViewerError::Other("Length of values is not the same as grid size".into()));
+        return Err(GribViewerError::Other(
+            "Length of values is not the same as grid size".into(),
+        ));
     }
 
     // corners of the overlay. The overlay extends half a cell beyond the corners of the grid.
@@ -153,12 +166,22 @@ pub(crate) fn generate_heatmap_overlay(
     let (max_x_overlay, max_y_overlay) = epsg_3857_projection(max_lat, max_lon);
 
     let color_max = match settings.color_max {
-        Some(c) => { c }
-        None => { values.iter().filter(|&&x| !x.is_nan()).copied().reduce(f32::max).unwrap() }
+        Some(c) => c,
+        None => values
+            .iter()
+            .filter(|&&x| !x.is_nan())
+            .copied()
+            .reduce(f32::max)
+            .unwrap(),
     };
     let color_min = match settings.color_min {
-        Some(c) => { c }
-        None => values.iter().filter(|&&x| !x.is_nan()).copied().reduce(f32::min).unwrap()
+        Some(c) => c,
+        None => values
+            .iter()
+            .filter(|&&x| !x.is_nan())
+            .copied()
+            .reduce(f32::min)
+            .unwrap(),
     };
 
     let width_px = n_lon * settings.pixels_per_point;
@@ -194,9 +217,11 @@ pub(crate) fn generate_heatmap_overlay(
                 lat_1 = lat_1d[j];
             }
 
-            let idx_00 = *index_map.get(&(i-1, j-1)).expect("indices are not valid");
-            let idx_01 = *index_map.get(&(i-1, j)).expect("indices are not valid");
-            let idx_10 = *index_map.get(&(i, j-1)).expect("indices are not valid");
+            let idx_00 = *index_map
+                .get(&(i - 1, j - 1))
+                .expect("indices are not valid");
+            let idx_01 = *index_map.get(&(i - 1, j)).expect("indices are not valid");
+            let idx_10 = *index_map.get(&(i, j - 1)).expect("indices are not valid");
             let idx_11 = *index_map.get(&(i, j)).expect("indices are not valid");
 
             // perform bilinear interpolation (in lat-lon space)
@@ -207,14 +232,16 @@ pub(crate) fn generate_heatmap_overlay(
             let w_11 = (lon - lon_0) * (lat - lat_0) / denominator;
 
             // interpolated value
-            let value = w_00 * values[idx_00] + w_01 * values[idx_01] + w_10 * values[idx_10] + w_11 * values[idx_11];
-            let color_value = if settings.remove_out_of_bounds
-                && (value < color_min || value > color_max)
-            {
-                f32::NAN
-            } else {
-                (value.clamp(color_min, color_max) - color_min) / (color_max - color_min)
-            };
+            let value = w_00 * values[idx_00]
+                + w_01 * values[idx_01]
+                + w_10 * values[idx_10]
+                + w_11 * values[idx_11];
+            let color_value =
+                if settings.remove_out_of_bounds && (value < color_min || value > color_max) {
+                    f32::NAN
+                } else {
+                    (value.clamp(color_min, color_max) - color_min) / (color_max - color_min)
+                };
 
             let color = color_gradient.at(color_value).to_rgba8();
 
@@ -222,7 +249,15 @@ pub(crate) fn generate_heatmap_overlay(
         }
     }
 
-    Ok(ImageOverlay { image, width_px, height_px, min_lat, max_lat, min_lon, max_lon })
+    Ok(ImageOverlay {
+        image,
+        width_px,
+        height_px,
+        min_lat,
+        max_lat,
+        min_lon,
+        max_lon,
+    })
 }
 
 fn index_step_and_scale_based_on_zoom(dx: f32, dy: f32, zoom_level: i64) -> (usize, f32, i64) {
@@ -235,8 +270,11 @@ fn index_step_and_scale_based_on_zoom(dx: f32, dy: f32, zoom_level: i64) -> (usi
     // scale multiplier is the amount by which all barbs are scaled
     let scale_multiplier = d_min / 100.0;
 
-    let index_step = usize::max(1_usize, 2_f32.powf((max_zoom_level - zoom_level)as f32) as usize);
-    let scale = scale_multiplier*(index_step as f32);
+    let index_step = usize::max(
+        1_usize,
+        2_f32.powf((max_zoom_level - zoom_level) as f32) as usize,
+    );
+    let scale = scale_multiplier * (index_step as f32);
     (index_step, scale, max_zoom_level)
 }
 
@@ -264,11 +302,15 @@ fn get_lat_lon_1d(
             return Ok((lat, lon));
         }
         GridDefinitionTemplateValues::Template20(_) => {
-            return Err(GribViewerError::Other("1d lat/lon not implemented for Polar Stereographic grid".into()));
+            return Err(GribViewerError::Other(
+                "1d lat/lon not implemented for Polar Stereographic grid".into(),
+            ));
         }
         GridDefinitionTemplateValues::Template30(_) => {
             // Lambert grid logic here
-            return Err(GribViewerError::Other("1d lat/lon not implemented for Lambert grid".into()));
+            return Err(GribViewerError::Other(
+                "1d lat/lon not implemented for Lambert grid".into(),
+            ));
         }
         GridDefinitionTemplateValues::Template40(grid) => {
             let latlons = grid.latlons()?;
@@ -288,7 +330,9 @@ fn get_lat_lon_1d(
     }
 }
 
-fn get_index_map(grid: &GridDefinitionTemplateValues) -> Result<HashMap<(usize, usize), usize>, GribViewerError> {
+fn get_index_map(
+    grid: &GridDefinitionTemplateValues,
+) -> Result<HashMap<(usize, usize), usize>, GribViewerError> {
     // TODO: can this be done without a HashMap, but with a formula?
     let (ni, nj) = grid.grid_shape();
     let mut map: HashMap<(usize, usize), usize> = HashMap::with_capacity(ni * nj);
@@ -331,7 +375,6 @@ mod tests {
 
     use crate::overlays::{first_bigger_than, get_index_map, get_lat_lon_1d};
 
-
     #[test]
     fn test_get_lat_lon_1d() {
         let def = grib::LatLonGridDefinition {
@@ -366,7 +409,11 @@ mod tests {
         let map = get_index_map(&grid).expect("get_index_map failed");
 
         for (idx, (i, j)) in ij.enumerate() {
-            assert_eq!(idx, *map.get(&(i, j)).expect(&format!("i: {}, j: {} not in map", i, j)));
+            assert_eq!(
+                idx,
+                *map.get(&(i, j))
+                    .expect(&format!("i: {}, j: {} not in map", i, j))
+            );
         }
     }
 

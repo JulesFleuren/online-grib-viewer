@@ -4,12 +4,19 @@ pub(crate) fn norm(first_component: &Vec<f32>, second_component: &Vec<f32>) -> V
     // TODO: check if lengths match
     let mut result = Vec::with_capacity(first_component.len());
     for idx in 0..first_component.len() {
-        result.push(f32::sqrt(first_component[idx].powi(2) + second_component[idx].powi(2)));
+        result.push(f32::sqrt(
+            first_component[idx].powi(2) + second_component[idx].powi(2),
+        ));
     }
     result
 }
 
-pub(crate) fn find_closest_point_in_grid(lat: &Vec<f32>, lon: &Vec<f32>, query_lat: f32, query_lon: f32) -> usize {
+pub(crate) fn find_closest_point_in_grid(
+    lat: &Vec<f32>,
+    lon: &Vec<f32>,
+    query_lat: f32,
+    query_lon: f32,
+) -> usize {
     let mut closest_point_index = 0;
     let mut closest_distance = f32::MAX;
     for (i, (lat, lon)) in lat.iter().zip(lon.iter()).enumerate() {

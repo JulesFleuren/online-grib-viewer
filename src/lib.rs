@@ -1,24 +1,24 @@
-use log::warn;
-use wasm_bindgen::prelude::*;
 use console_error_panic_hook;
-use grib::codetables::{Lookup, CodeTable4_2};
-use js_sys::{Float32Array};
-use std::iter::zip;
-use std::{collections::HashMap};
+use grib::codetables::{CodeTable4_2, Lookup};
+use js_sys::Float32Array;
+use log::warn;
+use std::collections::HashMap;
 use std::collections::HashSet;
+use std::iter::zip;
+use wasm_bindgen::prelude::*;
 
 use crate::error::*;
-use crate::overlays::*;
-use crate::windbarbs::*;
 use crate::grib_helpers::*;
 use crate::math::*;
+use crate::overlays::*;
+use crate::windbarbs::*;
 
-pub mod overlays;
-pub mod windbarbs;
-pub mod projection;
 pub mod error;
 pub mod grib_helpers;
 pub mod math;
+pub mod overlays;
+pub mod projection;
+pub mod windbarbs;
 
 #[wasm_bindgen(start)]
 pub fn init() {
@@ -34,25 +34,42 @@ pub fn get_available_parameters(bytes: &[u8]) -> Result<Vec<JsValue>, JsValue> {
         let discipline = message.indicator().discipline;
         let prod_def = message.prod_def();
         let Some(category) = prod_def.parameter_category() else {
-            warn!("Unsupported product definition template number: {}, skipping message", prod_def.prod_tmpl_num());
+            warn!(
+                "Unsupported product definition template number: {}, skipping message",
+                prod_def.prod_tmpl_num()
+            );
             continue;
-            };
-        let parameter = prod_def.parameter_number().expect("parameter_category() should have failed");
+        };
+        let parameter = prod_def
+            .parameter_number()
+            .expect("parameter_category() should have failed");
 
         let parameter_name = CodeTable4_2::new(discipline, category).lookup(usize::from(parameter));
 
         // insert parameter if it is not already present
-        parameters.entry(parameter_name.to_string()).or_insert((discipline, category, parameter));
+        parameters
+            .entry(parameter_name.to_string())
+            .or_insert((discipline, category, parameter));
     }
 
     let mut js_parameters: Vec<JsValue> = Vec::new();
     for (parameter_name, (discipline_number, category_number, parameter_number)) in parameters {
         let parameter = js_sys::Object::new();
-        js_sys::Reflect::set(&parameter, &JsValue::from_str("name"), &JsValue::from(parameter_name.to_string())).expect("failed to set name");
         js_sys::Reflect::set(
-            &parameter, &JsValue::from_str("key"),
-            &JsValue::from(format!("grib2_{}_{}_{}", discipline_number, category_number, parameter_number))
-        ).expect("failed to set key");
+            &parameter,
+            &JsValue::from_str("name"),
+            &JsValue::from(parameter_name.to_string()),
+        )
+        .expect("failed to set name");
+        js_sys::Reflect::set(
+            &parameter,
+            &JsValue::from_str("key"),
+            &JsValue::from(format!(
+                "grib2_{}_{}_{}",
+                discipline_number, category_number, parameter_number
+            )),
+        )
+        .expect("failed to set key");
         js_parameters.push(JsValue::from(parameter));
     }
     Ok(js_parameters)
@@ -60,8 +77,7 @@ pub fn get_available_parameters(bytes: &[u8]) -> Result<Vec<JsValue>, JsValue> {
 
 #[wasm_bindgen]
 pub fn get_available_timestamps(bytes: &[u8], key: &str) -> Result<Vec<JsValue>, JsValue> {
-    let grib2 = grib::from_bytes(bytes)
-        .map_err(|e| GribViewerError::from(e))?;
+    let grib2 = grib::from_bytes(bytes).map_err(|e| GribViewerError::from(e))?;
 
     let mut times: HashSet<i64> = HashSet::new();
     let (discipline, category, parameter) = grib_parameter_from_key(key)?;
@@ -71,7 +87,10 @@ pub fn get_available_timestamps(bytes: &[u8], key: &str) -> Result<Vec<JsValue>,
         if let Some(forecast_time) = temporal_info.forecast_time_target {
             times.insert(forecast_time.timestamp());
         } else {
-            warn!("Message with invalid forecast time, skipping message {:?}", index);
+            warn!(
+                "Message with invalid forecast time, skipping message {:?}",
+                index
+            );
             continue;
         }
     }
@@ -79,19 +98,24 @@ pub fn get_available_timestamps(bytes: &[u8], key: &str) -> Result<Vec<JsValue>,
     let mut sorted_times: Vec<i64> = times.into_iter().collect();
     sorted_times.sort();
 
-    let js_times: Vec<JsValue> = sorted_times
-        .into_iter()
-        .map(JsValue::from)
-        .collect();
+    let js_times: Vec<JsValue> = sorted_times.into_iter().map(JsValue::from).collect();
 
     Ok(js_times)
 }
 
 #[wasm_bindgen]
-pub fn query_grib_message_at_point(bytes: &[u8], key: &str, time: i64, query_lat: f32, query_lon: f32) -> Result<JsValue, JsValue> {
+pub fn query_grib_message_at_point(
+    bytes: &[u8],
+    key: &str,
+    time: i64,
+    query_lat: f32,
+    query_lon: f32,
+) -> Result<JsValue, JsValue> {
     let parts: Vec<&str> = key.split('_').collect();
     if parts.len() != 4 || parts[0] != "grib2" {
-        return Err(JsValue::from_str("Invalid key format. Expected 'grib2_<disc>_<cat>_<param>'"));
+        return Err(JsValue::from_str(
+            "Invalid key format. Expected 'grib2_<disc>_<cat>_<param>'",
+        ));
     }
 
     let discipline: u8 = parts[1]
@@ -111,9 +135,24 @@ pub fn query_grib_message_at_point(bytes: &[u8], key: &str, time: i64, query_lat
     let nearest_point_index = find_closest_point_in_grid(&lat, &lon, query_lat, query_lon);
 
     let return_value = js_sys::Object::new();
-    js_sys::Reflect::set(&return_value, &JsValue::from_str("lat"), &JsValue::from(lat[nearest_point_index])).expect("failed to set lat");
-    js_sys::Reflect::set(&return_value, &JsValue::from_str("lon"), &JsValue::from(lon[nearest_point_index])).expect("failed to set lon");
-    js_sys::Reflect::set(&return_value, &JsValue::from_str("value"), &JsValue::from(values[nearest_point_index])).expect("failed to set value");
+    js_sys::Reflect::set(
+        &return_value,
+        &JsValue::from_str("lat"),
+        &JsValue::from(lat[nearest_point_index]),
+    )
+    .expect("failed to set lat");
+    js_sys::Reflect::set(
+        &return_value,
+        &JsValue::from_str("lon"),
+        &JsValue::from(lon[nearest_point_index]),
+    )
+    .expect("failed to set lon");
+    js_sys::Reflect::set(
+        &return_value,
+        &JsValue::from_str("value"),
+        &JsValue::from(values[nearest_point_index]),
+    )
+    .expect("failed to set value");
     Ok(JsValue::from(return_value))
 }
 
@@ -132,13 +171,21 @@ pub fn get_scalar_field(bytes: &[u8], key: &str, time: i64) -> Result<JsValue, J
     let result = js_sys::Object::new();
     js_sys::Reflect::set(&result, &JsValue::from_str("lat"), &lat).expect("failed to set lat");
     js_sys::Reflect::set(&result, &JsValue::from_str("lon"), &lon).expect("failed to set lon");
-    js_sys::Reflect::set(&result, &JsValue::from_str("values"), &values).expect("failed to set values");
+    js_sys::Reflect::set(&result, &JsValue::from_str("values"), &values)
+        .expect("failed to set values");
 
     Ok(JsValue::from(result))
 }
 
 #[wasm_bindgen]
-pub fn vector_field_overlay(bytes: &[u8], key_u: &str, key_v: &str, time: i64, zoom_level: i64, arrow_type: &str) -> Result<JsValue, JsValue> {
+pub fn vector_field_overlay(
+    bytes: &[u8],
+    key_u: &str,
+    key_v: &str,
+    time: i64,
+    zoom_level: i64,
+    arrow_type: &str,
+) -> Result<JsValue, JsValue> {
     let arrow_type: ArrowType = serde_plain::from_str(arrow_type)
         .map_err(|e| GribViewerError::Other(format!("Invalid arrow type: {}", e)))?;
 
@@ -158,7 +205,12 @@ pub fn vector_field_overlay(bytes: &[u8], key_u: &str, key_v: &str, time: i64, z
 }
 
 #[wasm_bindgen]
-pub fn heatmap_overlay(bytes: &[u8], key: &str, time: i64, heatmap_overlay_settings: JsValue) -> Result<JsValue, JsValue> {
+pub fn heatmap_overlay(
+    bytes: &[u8],
+    key: &str,
+    time: i64,
+    heatmap_overlay_settings: JsValue,
+) -> Result<JsValue, JsValue> {
     let heatmap_overlay_settings = serde_wasm_bindgen::from_value(heatmap_overlay_settings)
         .map_err(|e| GribViewerError::Other(format!("Error deserializing settings: {}", e)))?;
 
@@ -173,7 +225,13 @@ pub fn heatmap_overlay(bytes: &[u8], key: &str, time: i64, heatmap_overlay_setti
 }
 
 #[wasm_bindgen]
-pub fn magnitude_heatmap_overlay(bytes: &[u8], key_u: &str, key_v: &str, time: i64, heatmap_overlay_settings: JsValue) -> Result<JsValue, JsValue> {
+pub fn magnitude_heatmap_overlay(
+    bytes: &[u8],
+    key_u: &str,
+    key_v: &str,
+    time: i64,
+    heatmap_overlay_settings: JsValue,
+) -> Result<JsValue, JsValue> {
     let heatmap_overlay_settings = serde_wasm_bindgen::from_value(heatmap_overlay_settings)
         .map_err(|e| GribViewerError::Other(format!("Error deserializing settings: {}", e)))?;
 
@@ -197,16 +255,14 @@ pub fn magnitude_heatmap_overlay(bytes: &[u8], key_u: &str, key_v: &str, time: i
 /// Go through all grib messages with this key, and find the minimum and maximum occuring value.
 #[wasm_bindgen]
 pub fn find_min_max_value(bytes: &[u8], key: &str) -> Result<JsValue, JsValue> {
-    let grib2 = grib::from_bytes(bytes)
-        .map_err(|e| GribViewerError::from(e))?;
+    let grib2 = grib::from_bytes(bytes).map_err(|e| GribViewerError::from(e))?;
     let (discipline, category, parameter) = grib_parameter_from_key(key)?;
 
     let (mut param_min, mut param_max) = (f32::INFINITY, f32::NEG_INFINITY);
     for (index, message) in iter_messages_of_parameter(&grib2, discipline, category, parameter) {
-        let decoder = grib::Grib2SubmessageDecoder::from(message)
-            .map_err(|e| GribViewerError::from(e))?;
-        let mut values_iter = decoder.dispatch()
-            .map_err(|e| GribViewerError::from(e))?;
+        let decoder =
+            grib::Grib2SubmessageDecoder::from(message).map_err(|e| GribViewerError::from(e))?;
+        let mut values_iter = decoder.dispatch().map_err(|e| GribViewerError::from(e))?;
 
         let first = match values_iter.next() {
             Some(val) => (val, val),
@@ -217,52 +273,67 @@ pub fn find_min_max_value(bytes: &[u8], key: &str) -> Result<JsValue, JsValue> {
         };
 
         // iterate over all values in message and find the min and max value (skipping Nan's)
-        let (message_min, message_max) = values_iter.fold(first, |(min, max), val| {
-            (min.min(val), max.max(val))
-        });
+        let (message_min, message_max) =
+            values_iter.fold(first, |(min, max), val| (min.min(val), max.max(val)));
         param_min = param_min.min(message_min);
         param_max = param_max.max(message_max);
     }
 
     if !(param_min.is_finite() && param_max.is_finite()) {
-        return Err(GribViewerError::Other("No matching grib messages found, or all messages were emtpy".to_string()).into());
+        return Err(GribViewerError::Other(
+            "No matching grib messages found, or all messages were emtpy".to_string(),
+        )
+        .into());
     }
 
     let result = js_sys::Object::new();
-    js_sys::Reflect::set(&result, &JsValue::from_str("min"), &JsValue::from(param_min)).expect("failed to set min");
-    js_sys::Reflect::set(&result, &JsValue::from_str("max"), &JsValue::from(param_max)).expect("failed to set max");
+    js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("min"),
+        &JsValue::from(param_min),
+    )
+    .expect("failed to set min");
+    js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("max"),
+        &JsValue::from(param_max),
+    )
+    .expect("failed to set max");
     Ok(JsValue::from(result))
 }
 
 /// Go through all grib messages with this key, and find the minimum and maximum occuring value.
 #[wasm_bindgen]
 pub fn find_min_max_magnitude(bytes: &[u8], key_u: &str, key_v: &str) -> Result<JsValue, JsValue> {
-    let grib2 = grib::from_bytes(bytes)
-        .map_err(|e| GribViewerError::from(e))?;
+    let grib2 = grib::from_bytes(bytes).map_err(|e| GribViewerError::from(e))?;
     let param_u = grib_parameter_from_key(key_u)?;
     let param_v = grib_parameter_from_key(key_v)?;
 
     let (mut param_min, mut param_max) = (f32::INFINITY, f32::NEG_INFINITY);
     'u: for (_, message_u) in iter_messages_of_parameter(&grib2, param_u.0, param_u.1, param_u.2) {
         let temporal_info = grib::TemporalInfo::from(&message_u.temporal_raw_info());
-        let Some(t_u) = temporal_info.forecast_time_target else { continue; };
+        let Some(t_u) = temporal_info.forecast_time_target else {
+            continue;
+        };
 
-        let decoder_u = grib::Grib2SubmessageDecoder::from(message_u)
-            .map_err(|e| GribViewerError::from(e))?;
-        let u_iter = decoder_u.dispatch()
-            .map_err(|e| GribViewerError::from(e))?;
+        let decoder_u =
+            grib::Grib2SubmessageDecoder::from(message_u).map_err(|e| GribViewerError::from(e))?;
+        let u_iter = decoder_u.dispatch().map_err(|e| GribViewerError::from(e))?;
 
         // find the v component with matching timestamp
-        'v: for (_, message_v) in iter_messages_of_parameter(&grib2, param_v.0, param_v.1, param_v.2) {
+        'v: for (_, message_v) in
+            iter_messages_of_parameter(&grib2, param_v.0, param_v.1, param_v.2)
+        {
             let temporal_info = grib::TemporalInfo::from(&message_v.temporal_raw_info());
-            let Some(t_v) = temporal_info.forecast_time_target else { continue 'v; };
+            let Some(t_v) = temporal_info.forecast_time_target else {
+                continue 'v;
+            };
 
             if t_u == t_v {
                 // If we have found a message_u and a message_v with matching timestamps, construct iter over v values
                 let decoder_v = grib::Grib2SubmessageDecoder::from(message_v)
                     .map_err(|e| GribViewerError::from(e))?;
-                let v_iter = decoder_v.dispatch()
-                    .map_err(|e| GribViewerError::from(e))?;
+                let v_iter = decoder_v.dispatch().map_err(|e| GribViewerError::from(e))?;
 
                 // iterator over both components
                 let mut iter = zip(u_iter, v_iter);
@@ -270,28 +341,39 @@ pub fn find_min_max_magnitude(bytes: &[u8], key_u: &str, key_v: &str) -> Result<
                 // iterate over both components, calculate their norm and find min and max of norm
                 if let Some((first_u, first_v)) = iter.next() {
                     let first_norm = (first_u * first_u + first_v * first_v).sqrt();
-                    let (message_min, message_max) = iter.fold(
-                        (first_norm, first_norm),
-                        |(min, max), (u, v)| {
+                    let (message_min, message_max) =
+                        iter.fold((first_norm, first_norm), |(min, max), (u, v)| {
                             let norm = (u * u + v * v).sqrt();
                             (min.min(norm), max.max(norm))
-                        },
-                    );
+                        });
                     param_min = param_min.min(message_min);
                     param_max = param_max.max(message_max);
                 }
                 // min, max has been updated, continue outer loop
-                continue 'u
+                continue 'u;
             }
         }
     }
 
     if !(param_min.is_finite() && param_max.is_finite()) {
-        return Err(GribViewerError::Other("No matching grib messages found, or all messages were emtpy".to_string()).into());
+        return Err(GribViewerError::Other(
+            "No matching grib messages found, or all messages were emtpy".to_string(),
+        )
+        .into());
     }
 
     let result = js_sys::Object::new();
-    js_sys::Reflect::set(&result, &JsValue::from_str("min"), &JsValue::from(param_min)).expect("failed to set min");
-    js_sys::Reflect::set(&result, &JsValue::from_str("max"), &JsValue::from(param_max)).expect("failed to set max");
+    js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("min"),
+        &JsValue::from(param_min),
+    )
+    .expect("failed to set min");
+    js_sys::Reflect::set(
+        &result,
+        &JsValue::from_str("max"),
+        &JsValue::from(param_max),
+    )
+    .expect("failed to set max");
     Ok(JsValue::from(result))
 }
