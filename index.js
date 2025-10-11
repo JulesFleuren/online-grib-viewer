@@ -5,7 +5,8 @@ import init, { get_available_parameters,
   heatmap_overlay,
   magnitude_heatmap_overlay,
   get_scalar_field,
-  find_min_max_value} from './pkg/online_grib_viewer.js';
+  find_min_max_value,
+  find_min_max_magnitude} from './pkg/online_grib_viewer.js';
 
 // certain parameter pairs are known to be vector fields
 const PARAMETER_PAIRS = {
@@ -32,8 +33,8 @@ let overlayBounds = null;
 
 let settings = {
   "grib2_0_1_52": { colorMin: 0.001, colorMax: 100.001, removeOutOfBounds: true }, // total precipitation rate
-  "vector:grib2_0_2_2,grib2_0_2_3": { colorMin: 0, colorMax: 35.0 }, // wind
-  "vector:grib2_10_1_2,grib2_10_1_3": { colorMin: 0, arrowType: ArrowType.PIVOT_CENTER } // current
+  // "vector:grib2_0_2_2,grib2_0_2_3": { colorMin: 0, colorMax: 35.0 }, // wind
+  // "vector:grib2_10_1_2,grib2_10_1_3": { colorMin: 0, arrowType: ArrowType.PIVOT_CENTER } // current
 };
 
 function clearHeatMap() {
@@ -244,16 +245,16 @@ function displayHeatmap(key, time) {
     if (selectedVectorFieldParameter == "None") {
       return;
     }
+    const [u_key, v_key] = selectedVectorFieldParameter.split(":")[1].split(',');
 
     if (selectedVectorFieldParameter in settings) {
       heatmapSettings = settings[selectedVectorFieldParameter];
     } else {
-      let min, max = find_min_max_value(gribBytes, selectedVectorFieldParameter);
-      heatmapSettings = { colorMin: min, colorMax: max };
+      let res = find_min_max_magnitude(gribBytes, u_key, v_key);
+      heatmapSettings = { colorMin: res.min, colorMax: res.max };
       settings[selectedVectorFieldParameter] = heatmapSettings;
     }
 
-    const [u_key, v_key] = selectedVectorFieldParameter.split(":")[1].split(',');
     imageOverlay = magnitude_heatmap_overlay(gribBytes, u_key, v_key, BigInt(time), heatmapSettings);
   } else {
 

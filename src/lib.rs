@@ -3,6 +3,7 @@ use wasm_bindgen::prelude::*;
 use console_error_panic_hook;
 use grib::codetables::{Lookup, CodeTable4_2};
 use js_sys::{Float32Array};
+use std::iter::zip;
 use std::{collections::HashMap};
 use std::collections::HashSet;
 
@@ -200,7 +201,7 @@ pub fn find_min_max_value(bytes: &[u8], key: &str) -> Result<JsValue, JsValue> {
         .map_err(|e| GribViewerError::from(e))?;
     let (discipline, category, parameter) = grib_parameter_from_key(key)?;
 
-    let (mut param_min, mut param_max) = (f32::MAX, f32::MIN);
+    let (mut param_min, mut param_max) = (f32::INFINITY, f32::NEG_INFINITY);
     for (index, message) in iter_messages_of_parameter(&grib2, discipline, category, parameter) {
         let decoder = grib::Grib2SubmessageDecoder::from(message)
             .map_err(|e| GribViewerError::from(e))?;
@@ -216,14 +217,76 @@ pub fn find_min_max_value(bytes: &[u8], key: &str) -> Result<JsValue, JsValue> {
         };
 
         // iterate over all values in message and find the min and max value (skipping Nan's)
-        let (message_min, message_max) = values_iter.filter(|&x| !x.is_nan()).fold(first, |(min, max), val| {
+        let (message_min, message_max) = values_iter.fold(first, |(min, max), val| {
             (min.min(val), max.max(val))
         });
         param_min = param_min.min(message_min);
         param_max = param_max.max(message_max);
     }
 
-    if param_min == f32::MAX && param_max == f32::MIN {
+    if !(param_min.is_finite() && param_max.is_finite()) {
+        return Err(GribViewerError::Other("No matching grib messages found, or all messages were emtpy".to_string()).into());
+    }
+
+    let result = js_sys::Object::new();
+    js_sys::Reflect::set(&result, &JsValue::from_str("min"), &JsValue::from(param_min)).expect("failed to set min");
+    js_sys::Reflect::set(&result, &JsValue::from_str("max"), &JsValue::from(param_max)).expect("failed to set max");
+    Ok(JsValue::from(result))
+}
+
+/// Go through all grib messages with this key, and find the minimum and maximum occuring value.
+#[wasm_bindgen]
+pub fn find_min_max_magnitude(bytes: &[u8], key_u: &str, key_v: &str) -> Result<JsValue, JsValue> {
+    let grib2 = grib::from_bytes(bytes)
+        .map_err(|e| GribViewerError::from(e))?;
+    let param_u = grib_parameter_from_key(key_u)?;
+    let param_v = grib_parameter_from_key(key_v)?;
+
+    let (mut param_min, mut param_max) = (f32::INFINITY, f32::NEG_INFINITY);
+    'u: for (_, message_u) in iter_messages_of_parameter(&grib2, param_u.0, param_u.1, param_u.2) {
+        let temporal_info = grib::TemporalInfo::from(&message_u.temporal_raw_info());
+        let Some(t_u) = temporal_info.forecast_time_target else { continue; };
+
+        let decoder_u = grib::Grib2SubmessageDecoder::from(message_u)
+            .map_err(|e| GribViewerError::from(e))?;
+        let u_iter = decoder_u.dispatch()
+            .map_err(|e| GribViewerError::from(e))?;
+
+        // find the v component with matching timestamp
+        'v: for (_, message_v) in iter_messages_of_parameter(&grib2, param_v.0, param_v.1, param_v.2) {
+            let temporal_info = grib::TemporalInfo::from(&message_v.temporal_raw_info());
+            let Some(t_v) = temporal_info.forecast_time_target else { continue 'v; };
+
+            if t_u == t_v {
+                // If we have found a message_u and a message_v with matching timestamps, construct iter over v values
+                let decoder_v = grib::Grib2SubmessageDecoder::from(message_v)
+                    .map_err(|e| GribViewerError::from(e))?;
+                let v_iter = decoder_v.dispatch()
+                    .map_err(|e| GribViewerError::from(e))?;
+
+                // iterator over both components
+                let mut iter = zip(u_iter, v_iter);
+
+                // iterate over both components, calculate their norm and find min and max of norm
+                if let Some((first_u, first_v)) = iter.next() {
+                    let first_norm = (first_u * first_u + first_v * first_v).sqrt();
+                    let (message_min, message_max) = iter.fold(
+                        (first_norm, first_norm),
+                        |(min, max), (u, v)| {
+                            let norm = (u * u + v * v).sqrt();
+                            (min.min(norm), max.max(norm))
+                        },
+                    );
+                    param_min = param_min.min(message_min);
+                    param_max = param_max.max(message_max);
+                }
+                // min, max has been updated, continue outer loop
+                continue 'u
+            }
+        }
+    }
+
+    if !(param_min.is_finite() && param_max.is_finite()) {
         return Err(GribViewerError::Other("No matching grib messages found, or all messages were emtpy".to_string()).into());
     }
 
