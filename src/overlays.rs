@@ -328,7 +328,6 @@ fn first_bigger_than(sorted_vec: &[f32], target: f32) -> usize {
 #[cfg(test)]
 mod tests {
     use grib::GridDefinitionTemplateValues;
-    use colorgrad::Gradient;
 
     use crate::overlays::{first_bigger_than, get_index_map, get_lat_lon_1d};
 
