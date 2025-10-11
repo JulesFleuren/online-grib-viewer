@@ -1,12 +1,26 @@
 use colorgrad::Gradient;
 use grib::{GridDefinitionTemplateValues};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::f32;
 use std::fmt::{Write};
 
 use crate::error::GribViewerError;
 use crate::windbarbs::{get_arrow_path, ArrowType};
 use crate::projection::{epsg_3857_projection, inverse_epsg_3857_projection};
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HeatmapOverlaySettings {
+    pub color_min: Option<f32>,
+    pub color_max: Option<f32>,
+    #[serde(default)] // default: false
+    pub remove_out_of_bounds: bool,
+    #[serde(default = "default_pixels_per_point")]
+    pub pixels_per_point: usize,
+}
+
+fn default_pixels_per_point() -> usize {3}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -107,7 +121,7 @@ pub(crate) fn generate_vector_field_svg_overlay(
 pub(crate) fn generate_heatmap_overlay(
     grid: &GridDefinitionTemplateValues,
     values: Vec<f32>,
-    pixels_per_cell: usize,
+    settings: HeatmapOverlaySettings,
 ) -> Result<ImageOverlay, GribViewerError> {
     let (lat_1d, lon_1d) = get_lat_lon_1d(grid)?;
     let index_map = get_index_map(grid)?;
@@ -138,11 +152,17 @@ pub(crate) fn generate_heatmap_overlay(
     let (min_x_overlay, min_y_overlay) = epsg_3857_projection(min_lat, min_lon);
     let (max_x_overlay, max_y_overlay) = epsg_3857_projection(max_lat, max_lon);
 
-    let values_max = values.iter().filter(|&&x| !x.is_nan()).copied().reduce(f32::max).unwrap();
-    let values_min = values.iter().filter(|&&x| !x.is_nan()).copied().reduce(f32::min).unwrap();
+    let color_max = match settings.color_max {
+        Some(c) => { c }
+        None => { values.iter().filter(|&&x| !x.is_nan()).copied().reduce(f32::max).unwrap() }
+    };
+    let color_min = match settings.color_min {
+        Some(c) => { c }
+        None => values.iter().filter(|&&x| !x.is_nan()).copied().reduce(f32::min).unwrap()
+    };
 
-    let width_px = n_lon * pixels_per_cell;
-    let height_px = n_lat * pixels_per_cell;
+    let width_px = n_lon * settings.pixels_per_point;
+    let height_px = n_lat * settings.pixels_per_point;
 
     let width_single_pixel = (max_x_overlay - min_x_overlay) / (width_px as f32);
     let height_single_pixel = (max_y_overlay - min_y_overlay) / (height_px as f32);
@@ -188,7 +208,15 @@ pub(crate) fn generate_heatmap_overlay(
 
             // interpolated value
             let value = w_00 * values[idx_00] + w_01 * values[idx_01] + w_10 * values[idx_10] + w_11 * values[idx_11];
-            let color = color_gradient.at((value - values_min)/(values_max-values_min)).to_rgba8();
+            let color_value = if settings.remove_out_of_bounds
+                && (value < color_min || value > color_max)
+            {
+                f32::NAN
+            } else {
+                (value.clamp(color_min, color_max) - color_min) / (color_max - color_min)
+            };
+
+            let color = color_gradient.at(color_value).to_rgba8();
 
             image.extend_from_slice(&color);
         }
@@ -300,6 +328,7 @@ fn first_bigger_than(sorted_vec: &[f32], target: f32) -> usize {
 #[cfg(test)]
 mod tests {
     use grib::GridDefinitionTemplateValues;
+    use colorgrad::Gradient;
 
     use crate::overlays::{first_bigger_than, get_index_map, get_lat_lon_1d};
 
@@ -353,5 +382,14 @@ mod tests {
         assert_eq!(first_bigger_than(&array, 3.5f32), 3_usize);
         assert_eq!(first_bigger_than(&array, 4.0f32), 3_usize);
         assert_eq!(first_bigger_than(&array, 4.1f32), 3_usize);
+    }
+
+    #[test]
+    fn test_nan_color() {
+        let color_gradient = colorgrad::preset::turbo();
+        let color_value = f32::NAN;
+        println!("{:?}", color_gradient.at(color_value).to_rgba8());
+        println!("{:?}", color_gradient.at(0.0).to_rgba8());
+        println!("{:?}", color_gradient.at(0.001).to_rgba8());
     }
 }

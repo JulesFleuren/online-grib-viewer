@@ -167,21 +167,25 @@ pub fn vector_field_overlay(bytes: &[u8], key_u: &str, key_v: &str, time: i64, z
 }
 
 #[wasm_bindgen]
-pub fn heatmap_overlay(bytes: &[u8], key: &str, time: i64) -> Result<JsValue, JsValue> {
-    let pixels_per_cell = 3;
+pub fn heatmap_overlay(bytes: &[u8], key: &str, time: i64, heatmap_overlay_settings: JsValue) -> Result<JsValue, JsValue> {
+    let heatmap_overlay_settings = serde_wasm_bindgen::from_value(heatmap_overlay_settings)
+        .map_err(|e| GribViewerError::Other(format!("Error deserializing settings: {}", e)))?;
+
     let param = grib_parameter_from_key(key)?;
     let index = find_grib_index(bytes, param.0, param.1, param.2, time)?;
 
     let (grid, values) = get_grid_and_values(bytes, index)?;
 
-    let image_overlay = generate_heatmap_overlay(&grid, values, pixels_per_cell)?;
+    let image_overlay = generate_heatmap_overlay(&grid, values, heatmap_overlay_settings)?;
 
     Ok(serde_wasm_bindgen::to_value(&image_overlay)?)
 }
 
 #[wasm_bindgen]
-pub fn magnitude_heatmap_overlay(bytes: &[u8], key_u: &str, key_v: &str, time: i64) -> Result<JsValue, JsValue> {
-    let pixels_per_cell = 3;
+pub fn magnitude_heatmap_overlay(bytes: &[u8], key_u: &str, key_v: &str, time: i64, heatmap_overlay_settings: JsValue) -> Result<JsValue, JsValue> {
+    let heatmap_overlay_settings = serde_wasm_bindgen::from_value(heatmap_overlay_settings)
+        .map_err(|e| GribViewerError::Other(format!("Error deserializing settings: {}", e)))?;
+
     let param_u = grib_parameter_from_key(key_u)?;
     let index_u = find_grib_index(bytes, param_u.0, param_u.1, param_u.2, time)?;
     let param_v = grib_parameter_from_key(key_v)?;
@@ -194,7 +198,58 @@ pub fn magnitude_heatmap_overlay(bytes: &[u8], key_u: &str, key_v: &str, time: i
 
     let values = norm(&u, &v);
 
-    let image_overlay = generate_heatmap_overlay(&grid, values, pixels_per_cell)?;
+    let image_overlay = generate_heatmap_overlay(&grid, values, heatmap_overlay_settings)?;
 
     Ok(serde_wasm_bindgen::to_value(&image_overlay)?)
+}
+
+/// Go through all grib messages with this key, and find the minimum and maximum occuring value.
+#[wasm_bindgen]
+pub fn find_min_max_value(bytes: &[u8], key: &str) -> Result<JsValue, JsValue> {
+    let grib2 = grib::from_bytes(bytes)
+        .map_err(|e| GribViewerError::from(e))?;
+    let (discipline, category, parameter) = grib_parameter_from_key(key)?;
+
+    let (mut param_min, mut param_max) = (f32::MAX, f32::MIN);
+    for (index, message) in grib2.iter() {
+        let d = message.indicator().discipline;
+        let prod_def = message.prod_def();
+        let Some(c) = prod_def.parameter_category() else {
+            warn!("Unsupported product definition template number: {}, skipping message {:?}", prod_def.prod_tmpl_num(), index);
+            continue;
+            };
+        let p = prod_def.parameter_number().expect("parameter_category() should have failed");
+
+        // find message with matching discipline, category and parameter
+        if d == discipline && c == category && p == parameter {
+            let decoder = grib::Grib2SubmessageDecoder::from(message)
+                .map_err(|e| GribViewerError::from(e))?;
+            let mut values_iter = decoder.dispatch()
+                .map_err(|e| GribViewerError::from(e))?;
+
+            let first = match values_iter.next() {
+                Some(val) => (val, val),
+                None => {
+                    warn!("Grib message {:?} is empty, skipping message", index);
+                    continue;
+                }
+            };
+
+            // iterate over all values in message and find the min and max value (skipping Nan's)
+            let (message_min, message_max) = values_iter.filter(|&x| !x.is_nan()).fold(first, |(min, max), val| {
+                (min.min(val), max.max(val))
+            });
+            param_min = param_min.min(message_min);
+            param_max = param_max.max(message_max);
+        }
+    }
+
+    if param_min == f32::MAX && param_max == f32::MIN {
+        return Err(GribViewerError::Other("No matching grib messages found, or all messages were emtpy".to_string()).into());
+    }
+
+    let result = js_sys::Object::new();
+    js_sys::Reflect::set(&result, &JsValue::from_str("min"), &JsValue::from(param_min)).expect("failed to set min");
+    js_sys::Reflect::set(&result, &JsValue::from_str("max"), &JsValue::from(param_max)).expect("failed to set max");
+    Ok(JsValue::from(result))
 }
