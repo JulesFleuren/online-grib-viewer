@@ -383,13 +383,4 @@ mod tests {
         assert_eq!(first_bigger_than(&array, 4.0f32), 3_usize);
         assert_eq!(first_bigger_than(&array, 4.1f32), 3_usize);
     }
-
-    #[test]
-    fn test_nan_color() {
-        let color_gradient = colorgrad::preset::turbo();
-        let color_value = f32::NAN;
-        println!("{:?}", color_gradient.at(color_value).to_rgba8());
-        println!("{:?}", color_gradient.at(0.0).to_rgba8());
-        println!("{:?}", color_gradient.at(0.001).to_rgba8());
-    }
 }
