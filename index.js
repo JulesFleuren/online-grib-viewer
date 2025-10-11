@@ -1,4 +1,5 @@
-import init, { get_available_parameters,
+import init, {
+  get_available_parameters,
   get_available_timestamps,
   query_grib_message_at_point,
   vector_field_overlay,
@@ -6,19 +7,20 @@ import init, { get_available_parameters,
   magnitude_heatmap_overlay,
   get_scalar_field,
   find_min_max_value,
-  find_min_max_magnitude} from './pkg/online_grib_viewer.js';
+  find_min_max_magnitude,
+} from "./pkg/online_grib_viewer.js";
 
 // certain parameter pairs are known to be vector fields
 const PARAMETER_PAIRS = {
-  'Wind': { u: "grib2_0_2_2", v: "grib2_0_2_3" },
-  'Current': { u: "grib2_10_1_2", v: "grib2_10_1_3" },
+  Wind: { u: "grib2_0_2_2", v: "grib2_0_2_3" },
+  Current: { u: "grib2_10_1_2", v: "grib2_10_1_3" },
 };
 
 const ArrowType = {
   PIVOT_TIP: "PivotTip",
   PIVOT_CENTER: "PivotCenter",
   WIND_BARB: "WindBarb",
-}
+};
 
 let map;
 let heatLayer;
@@ -32,7 +34,7 @@ let selectedTime = null;
 let overlayBounds = null;
 
 let settings = {
-  "grib2_0_1_52": { colorMin: 0.001, colorMax: 100.001, removeOutOfBounds: true }, // total precipitation rate
+  grib2_0_1_52: { colorMin: 0.001, colorMax: 100.001, removeOutOfBounds: true }, // total precipitation rate
   // "vector:grib2_0_2_2,grib2_0_2_3": { colorMin: 0, colorMax: 35.0 }, // wind
   // "vector:grib2_10_1_2,grib2_10_1_3": { colorMin: 0, arrowType: ArrowType.PIVOT_CENTER } // current
 };
@@ -45,7 +47,7 @@ function clearHeatMap() {
 }
 
 function clearVectorField() {
-  arrowLayers.forEach(layer => map.removeLayer(layer));
+  arrowLayers.forEach((layer) => map.removeLayer(layer));
   arrowLayers = [];
 }
 
@@ -53,44 +55,46 @@ async function showParameterSelect(file) {
   const arrayBuffer = await file.arrayBuffer();
   gribBytes = new Uint8Array(arrayBuffer);
 
-  parameters = get_available_parameters(gribBytes)
+  parameters = get_available_parameters(gribBytes);
 
   // console.log('Available parameters:', parameters);
 
-  const vectorFieldSelect = document.getElementById('vectorFieldParameterSelect');
-  vectorFieldSelect.innerHTML = '';
+  const vectorFieldSelect = document.getElementById(
+    "vectorFieldParameterSelect",
+  );
+  vectorFieldSelect.innerHTML = "";
   // add option to plot no vector field
   {
-    const emptyOption = document.createElement('option');
+    const emptyOption = document.createElement("option");
     emptyOption.value = "None";
     emptyOption.textContent = "None";
     vectorFieldSelect.appendChild(emptyOption);
   }
   // Check if any parameter pairs are available for vector field display and add an option if so
-  Object.keys(PARAMETER_PAIRS).forEach(pairName => {
+  Object.keys(PARAMETER_PAIRS).forEach((pairName) => {
     const pair = PARAMETER_PAIRS[pairName];
-    const hasU = parameters.some(p => p.key === pair.u);
-    const hasV = parameters.some(p => p.key === pair.v);
+    const hasU = parameters.some((p) => p.key === pair.u);
+    const hasV = parameters.some((p) => p.key === pair.v);
     if (hasU && hasV) {
-      const vectorFieldOption = document.createElement('option');
+      const vectorFieldOption = document.createElement("option");
       vectorFieldOption.value = `vector:${pair.u},${pair.v}`;
       vectorFieldOption.textContent = `${pairName}`;
       vectorFieldSelect.appendChild(vectorFieldOption);
     }
   });
 
-  const heatMapSelect = document.getElementById('heatMapParameterSelect');
-  heatMapSelect.innerHTML = '';
+  const heatMapSelect = document.getElementById("heatMapParameterSelect");
+  heatMapSelect.innerHTML = "";
 
   // add option to plot no heat map
   {
-    const emptyOption = document.createElement('option');
+    const emptyOption = document.createElement("option");
     emptyOption.value = "None";
     emptyOption.textContent = "None";
     heatMapSelect.appendChild(emptyOption);
   }
   // add option to plot magnitude of vector field
-  const option = document.createElement('option');
+  const option = document.createElement("option");
   option.value = "magnitudeVectorField";
   option.id = "magnitudeVectorFieldOption";
   option.textContent = "Magnitude of Vector Field";
@@ -100,14 +104,14 @@ async function showParameterSelect(file) {
   heatMapSelect.appendChild(option);
 
   // add all available parameters as options
-  parameters.forEach(p => {
-    const option = document.createElement('option');
+  parameters.forEach((p) => {
+    const option = document.createElement("option");
     option.value = p.key;
     option.textContent = p.name;
     heatMapSelect.appendChild(option);
   });
 
-  document.getElementById('parameterField').style.display = '';
+  document.getElementById("parameterField").style.display = "";
 
   // automatically select the first parameter and show the timesteps
   if (vectorFieldSelect.options.length > 1) {
@@ -123,14 +127,14 @@ async function showParameterSelect(file) {
 }
 
 function showTimeSelect(selectedParameter) {
-  if (selectedParameter.startsWith('vector')) {
+  if (selectedParameter.startsWith("vector")) {
     // Vector field
-    const [u_key, v_key] = selectedParameter.split(":")[1].split(',');
+    const [u_key, v_key] = selectedParameter.split(":")[1].split(",");
     if (u_key && v_key) {
       var timesU = get_available_timestamps(gribBytes, u_key);
       var timesV = get_available_timestamps(gribBytes, v_key);
       // find intersection of timesU and timesV
-      var times = timesU.filter(t => timesV.includes(t));
+      var times = timesU.filter((t) => timesV.includes(t));
     }
   } else {
     // Scalar field
@@ -139,25 +143,26 @@ function showTimeSelect(selectedParameter) {
       var times = get_available_timestamps(gribBytes, key);
     }
   }
-  const select = document.getElementById('timestampSelect');
-  select.innerHTML = '';
-  times.forEach(t => {
-    const option = document.createElement('option');
+  const select = document.getElementById("timestampSelect");
+  select.innerHTML = "";
+  times.forEach((t) => {
+    const option = document.createElement("option");
     option.value = t;
     option.textContent = new Date(Number(t) * 1000).toString();
     select.appendChild(option);
   });
-  document.getElementById('timestampField').style.display = '';
+  document.getElementById("timestampField").style.display = "";
 
   // automatically select timestamp
   if (times.length > 0) {
-    selectedTime = findNextOrEqualTimestamp(selectedTime, times.map(t => Number(t)));
+    selectedTime = findNextOrEqualTimestamp(
+      selectedTime,
+      times.map((t) => Number(t)),
+    );
     select.value = selectedTime;
     displayParameters(selectedTime);
   }
 }
-
-
 
 function displayCanvas(canvas) {
   // display the canvas on the bottom of the page for debugging
@@ -172,17 +177,23 @@ function displaySvg(svg) {
 function markAllPoints(lat, lon) {
   for (let i = 0; i < lat.length; i++) {
     if (isNaN(lat[i]) || isNaN(lon[i])) continue;
-    const marker = L.circleMarker([lat[i], lon[i]], {radius: 1}).addTo(map);
+    const marker = L.circleMarker([lat[i], lon[i]], { radius: 1 }).addTo(map);
   }
 }
 
 function displayVectorField(u_key, v_key, time) {
-
   clearVectorField();
 
   // generate wind barb overlay
   let zoomLevel = map.getZoom();
-  let svgOverlay = vector_field_overlay(gribBytes, u_key, v_key, BigInt(time), BigInt(zoomLevel), ArrowType.WIND_BARB);
+  let svgOverlay = vector_field_overlay(
+    gribBytes,
+    u_key,
+    v_key,
+    BigInt(time),
+    BigInt(zoomLevel),
+    ArrowType.WIND_BARB,
+  );
 
   // maxZoomLevel is the highest zoomLevel for which an svgOverlay is generated, for all higher zoomLevels the
   // svgOverlay of maxZoomLevel is used. maxZoomLevel is the zoomLevel at which all vectors are rendered.
@@ -194,27 +205,38 @@ function displayVectorField(u_key, v_key, time) {
   overlayBounds = [
     [svgOverlay.minLat, svgOverlay.minLon],
     [svgOverlay.maxLat, svgOverlay.maxLon],
-  ]
+  ];
   const minZoomLevel = map.getBoundsZoom(overlayBounds);
 
   if (zoomLevel < minZoomLevel) {
     zoomLevel = minZoomLevel;
-    svgOverlay = vector_field_overlay(gribBytes, u_key, v_key, BigInt(time), BigInt(zoomLevel), ArrowType.WIND_BARB);
+    svgOverlay = vector_field_overlay(
+      gribBytes,
+      u_key,
+      v_key,
+      BigInt(time),
+      BigInt(zoomLevel),
+      ArrowType.WIND_BARB,
+    );
     // svgOverlay.maxZoomLevel, svgOverlay.minLat, ..., svgOverlay.maxLon are independent of zoomLevel
   }
   // TODO: minZoomLevel can only be determined from overlayBounds with leaflet method map.getBounds, which means that
   // the vector_field_overlay has to be redrawn when initially zoomLevel < minZoomLevel. Can we avoid this?
 
   // Now display the wind barbs
-  const svgBlob = new Blob([svgOverlay.svgString], { type: "image/svg+xml;charset=utf-8" });
+  const svgBlob = new Blob([svgOverlay.svgString], {
+    type: "image/svg+xml;charset=utf-8",
+  });
   const vecFieldUrl = URL.createObjectURL(svgBlob);
 
   const vecFieldBounds = [
     [svgOverlay.minLat, svgOverlay.minLon],
     [svgOverlay.maxLat, svgOverlay.maxLon],
-  ]
+  ];
 
-  arrowLayers.push(L.imageOverlay(vecFieldUrl, vecFieldBounds, {opacity: 1.0}).addTo(map));
+  arrowLayers.push(
+    L.imageOverlay(vecFieldUrl, vecFieldBounds, { opacity: 1.0 }).addTo(map),
+  );
 
   // build a cache of layers at different zoom levels
   arrowZoomLayers = {};
@@ -222,9 +244,16 @@ function displayVectorField(u_key, v_key, time) {
 
   for (let zl = minZoomLevel; zl <= maxZoomLevel; zl++) {
     if (zl == zoomLevel) {
-      continue
+      continue;
     }
-    const svgOverlay = vector_field_overlay(gribBytes, u_key, v_key, BigInt(time), BigInt(zl), ArrowType.WIND_BARB);
+    const svgOverlay = vector_field_overlay(
+      gribBytes,
+      u_key,
+      v_key,
+      BigInt(time),
+      BigInt(zl),
+      ArrowType.WIND_BARB,
+    );
     arrowZoomLayers[zl] = svgOverlay;
   }
 
@@ -237,15 +266,18 @@ function displayVectorField(u_key, v_key, time) {
 function displayHeatmap(key, time) {
   clearHeatMap();
   let imageOverlay;
-  let heatmapSettings
+  let heatmapSettings;
 
   if (key == "magnitudeVectorField") {
-
-    const selectedVectorFieldParameter = document.getElementById('vectorFieldParameterSelect').value;
+    const selectedVectorFieldParameter = document.getElementById(
+      "vectorFieldParameterSelect",
+    ).value;
     if (selectedVectorFieldParameter == "None") {
       return;
     }
-    const [u_key, v_key] = selectedVectorFieldParameter.split(":")[1].split(',');
+    const [u_key, v_key] = selectedVectorFieldParameter
+      .split(":")[1]
+      .split(",");
 
     if (selectedVectorFieldParameter in settings) {
       heatmapSettings = settings[selectedVectorFieldParameter];
@@ -255,9 +287,14 @@ function displayHeatmap(key, time) {
       settings[selectedVectorFieldParameter] = heatmapSettings;
     }
 
-    imageOverlay = magnitude_heatmap_overlay(gribBytes, u_key, v_key, BigInt(time), heatmapSettings);
+    imageOverlay = magnitude_heatmap_overlay(
+      gribBytes,
+      u_key,
+      v_key,
+      BigInt(time),
+      heatmapSettings,
+    );
   } else {
-
     if (key in settings) {
       heatmapSettings = settings[key];
     } else {
@@ -266,30 +303,43 @@ function displayHeatmap(key, time) {
       settings[key] = heatmapSettings;
     }
 
-    imageOverlay = heatmap_overlay(gribBytes, key, BigInt(time), heatmapSettings);
+    imageOverlay = heatmap_overlay(
+      gribBytes,
+      key,
+      BigInt(time),
+      heatmapSettings,
+    );
   }
 
-  const canvas = document.createElement('canvas');
+  const canvas = document.createElement("canvas");
   canvas.width = imageOverlay.widthPx;
   canvas.height = imageOverlay.heightPx;
-  const ctx = canvas.getContext('2d');
-  const imageData = new ImageData(new Uint8ClampedArray(imageOverlay.image), imageOverlay.widthPx, imageOverlay.heightPx);
+  const ctx = canvas.getContext("2d");
+  const imageData = new ImageData(
+    new Uint8ClampedArray(imageOverlay.image),
+    imageOverlay.widthPx,
+    imageOverlay.heightPx,
+  );
   ctx.putImageData(imageData, 0, 0);
   const url = canvas.toDataURL();
 
   const bounds = [
     [imageOverlay.minLat, imageOverlay.minLon],
     [imageOverlay.maxLat, imageOverlay.maxLon],
-  ]
+  ];
 
-  heatLayer = L.imageOverlay(url, bounds, {opacity: 0.4}).addTo(map);
+  heatLayer = L.imageOverlay(url, bounds, { opacity: 0.4 }).addTo(map);
   overlayBounds = bounds;
   // map.fitBounds(bounds);
 }
 
 function displayParameters(time) {
-  const selectedVectorFieldParameter = document.getElementById('vectorFieldParameterSelect').value;
-  const selectedHeatMapParameter = document.getElementById('heatMapParameterSelect').value;
+  const selectedVectorFieldParameter = document.getElementById(
+    "vectorFieldParameterSelect",
+  ).value;
+  const selectedHeatMapParameter = document.getElementById(
+    "heatMapParameterSelect",
+  ).value;
 
   if (selectedHeatMapParameter != "None") {
     displayHeatmap(selectedHeatMapParameter, time);
@@ -298,7 +348,9 @@ function displayParameters(time) {
   }
   if (selectedVectorFieldParameter != "None") {
     // extract u_key and v_key from `vector:<u_key>,<v_key>` format
-    const [u_key, v_key] = selectedVectorFieldParameter.split(":")[1].split(',');
+    const [u_key, v_key] = selectedVectorFieldParameter
+      .split(":")[1]
+      .split(",");
     if (u_key && v_key) {
       displayVectorField(u_key, v_key, time);
       // document.getElementById('output').textContent = `Displaying vector field with U key: ${u_key} and V key: ${v_key}`;
@@ -311,45 +363,61 @@ function displayParameters(time) {
 
 // Function to update the zoom level display
 function updateZoomLevel() {
-  const zoomLevelDiv = document.getElementById('zoom-level');
+  const zoomLevelDiv = document.getElementById("zoom-level");
   zoomLevelDiv.textContent = `Zoom Level: ${map.getZoom()}`;
 
   // If arrow layers exist, update them based on zoom level
   if (arrowLayers.length > 0) {
-    const maxZoom = Math.max(...Object.keys(arrowZoomLayers).map(zl => Number(zl)));
-    const minZoom = Math.min(...Object.keys(arrowZoomLayers).map(zl => Number(zl)));
+    const maxZoom = Math.max(
+      ...Object.keys(arrowZoomLayers).map((zl) => Number(zl)),
+    );
+    const minZoom = Math.min(
+      ...Object.keys(arrowZoomLayers).map((zl) => Number(zl)),
+    );
     const currentZoom = map.getZoom();
     if (currentZoom > maxZoom || currentZoom < minZoom) {
       return;
     }
 
     // Remove existing arrow layers
-    arrowLayers.forEach(layer => map.removeLayer(layer));
+    arrowLayers.forEach((layer) => map.removeLayer(layer));
     arrowLayers = [];
 
     // Add the appropriate layer for the current zoom level
     if (arrowZoomLayers[currentZoom]) {
-      const svgOverlay = arrowZoomLayers[currentZoom]
-      const svgBlob = new Blob([svgOverlay.svgString], { type: "image/svg+xml;charset=utf-8" });
+      const svgOverlay = arrowZoomLayers[currentZoom];
+      const svgBlob = new Blob([svgOverlay.svgString], {
+        type: "image/svg+xml;charset=utf-8",
+      });
       const url = URL.createObjectURL(svgBlob);
 
       const bounds = [
         [svgOverlay.minLat, svgOverlay.minLon],
         [svgOverlay.maxLat, svgOverlay.maxLon],
-      ]
+      ];
 
-      arrowLayers.push(L.imageOverlay(url, bounds, {opacity: 1.0}).addTo(map));
+      arrowLayers.push(
+        L.imageOverlay(url, bounds, { opacity: 1.0 }).addTo(map),
+      );
     }
   }
 }
 
 function popupClosestGridPoint(lat, lon) {
-  const selectedVectorFieldParameter = document.getElementById('vectorFieldParameterSelect').value;
-  const selectedHeatMapParameter = document.getElementById('heatMapParameterSelect').value;
+  const selectedVectorFieldParameter = document.getElementById(
+    "vectorFieldParameterSelect",
+  ).value;
+  const selectedHeatMapParameter = document.getElementById(
+    "heatMapParameterSelect",
+  ).value;
 
   let lat_out, lon_out;
 
-  if (!gribBytes || !(selectedVectorFieldParameter || selectedHeatMapParameter)  || selectedTime === null) {
+  if (
+    !gribBytes ||
+    !(selectedVectorFieldParameter || selectedHeatMapParameter) ||
+    selectedTime === null
+  ) {
     return;
   }
 
@@ -357,38 +425,66 @@ function popupClosestGridPoint(lat, lon) {
 
   if (selectedVectorFieldParameter != "None") {
     // Vector field
-    const [u_key, v_key] = selectedVectorFieldParameter.split(":")[1].split(',');
+    const [u_key, v_key] = selectedVectorFieldParameter
+      .split(":")[1]
+      .split(",");
     // extract parameter name from heatMapParameterSelect
-    const vecFieldSel = document.getElementById('vectorFieldParameterSelect');
-    const parameterName = vecFieldSel.options[vecFieldSel.selectedIndex].textContent;
+    const vecFieldSel = document.getElementById("vectorFieldParameterSelect");
+    const parameterName =
+      vecFieldSel.options[vecFieldSel.selectedIndex].textContent;
     if (u_key && v_key) {
-      const u_data = query_grib_message_at_point(gribBytes, u_key, BigInt(selectedTime), lat, lon);
-      const v_data = query_grib_message_at_point(gribBytes, v_key, BigInt(selectedTime), lat, lon);
-      popupContent += `${parameterName}:<br>` +
+      const u_data = query_grib_message_at_point(
+        gribBytes,
+        u_key,
+        BigInt(selectedTime),
+        lat,
+        lon,
+      );
+      const v_data = query_grib_message_at_point(
+        gribBytes,
+        v_key,
+        BigInt(selectedTime),
+        lat,
+        lon,
+      );
+      popupContent +=
+        `${parameterName}:<br>` +
         `&emsp;U: ${u_data.value.toFixed(2)}<br>` +
         `&emsp;V: ${v_data.value.toFixed(2)}<br>` +
         `&emsp;Speed: ${Math.sqrt(u_data.value ** 2 + v_data.value ** 2).toFixed(2)}<br>` +
-        `&emsp;Direction: ${(90 - Math.atan2(v_data.value, u_data.value) * 180 / Math.PI).toFixed(2)}°<br>`;
-        // TODO: should wind direction be inverted?
+        `&emsp;Direction: ${(90 - (Math.atan2(v_data.value, u_data.value) * 180) / Math.PI).toFixed(2)}°<br>`;
+      // TODO: should wind direction be inverted?
       lat_out = u_data.lat;
       lon_out = u_data.lon;
     }
   }
-  if (selectedHeatMapParameter != "None" && selectedHeatMapParameter != "magnitudeVectorField") {
-    const data = query_grib_message_at_point(gribBytes, selectedHeatMapParameter, BigInt(selectedTime), lat, lon);
+  if (
+    selectedHeatMapParameter != "None" &&
+    selectedHeatMapParameter != "magnitudeVectorField"
+  ) {
+    const data = query_grib_message_at_point(
+      gribBytes,
+      selectedHeatMapParameter,
+      BigInt(selectedTime),
+      lat,
+      lon,
+    );
 
     // extract parameter name from heatMapParameterSelect
-    const heatMapSel = document.getElementById('heatMapParameterSelect');
-    const parameterName = heatMapSel.options[heatMapSel.selectedIndex].textContent;
+    const heatMapSel = document.getElementById("heatMapParameterSelect");
+    const parameterName =
+      heatMapSel.options[heatMapSel.selectedIndex].textContent;
 
     popupContent += `${parameterName}: ${data.value.toFixed(2)}<br>`;
     lat_out = data.lat;
     lon_out = data.lon;
   }
 
-  popupContent = "Closest grid point:<br>" +
+  popupContent =
+    "Closest grid point:<br>" +
     `&emsp;lat: ${lat_out.toFixed(8)}<br>` +
-    `&emsp;lon: ${lon_out.toFixed(8)}<br>` + popupContent;
+    `&emsp;lon: ${lon_out.toFixed(8)}<br>` +
+    popupContent;
 
   // show popup with queried data
   L.popup()
@@ -406,7 +502,7 @@ function findNextOrEqualTimestamp(timestamp, timestampArray) {
     }
   }
   // if all elements are smaller, return the last element
-  return timestampArray.at(-1)
+  return timestampArray.at(-1);
 }
 
 function findNextTimestamp(timestamp, timestampArray) {
@@ -418,7 +514,7 @@ function findNextTimestamp(timestamp, timestampArray) {
     }
   }
   // if all elements are smaller, return the last element
-  return timestampArray.at(-1)
+  return timestampArray.at(-1);
 }
 
 function findPreviousTimestamp(timestamp, timestampArray) {
@@ -430,90 +526,121 @@ function findPreviousTimestamp(timestamp, timestampArray) {
     }
   }
   // if all elements are bigger, return the first element
-  return timestampArray.at(0)
+  return timestampArray.at(0);
 }
 
 init().then(() => {
   // epoch time in seconds instead of miliseconds
   selectedTime = Math.floor(Date.now() / 1000);
-  map = L.map('map').setView([0, 0], 2);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  map = L.map("map").setView([0, 0], 2);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution:
+      '&copy <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> contributors',
   }).addTo(map);
 
-  document.getElementById('fileInput').addEventListener('change', async (e) => {
+  document.getElementById("fileInput").addEventListener("change", async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     await showParameterSelect(file);
     map.fitBounds(overlayBounds);
   });
 
-  document.getElementById('heatMapParameterSelect').addEventListener('change', (e) => {
-    const selectedHMParameter = e.target.value;
-    const selectedVFParameter = document.getElementById('vectorFieldParameterSelect').value;
-    if ((selectedVFParameter == "None") && selectedHMParameter != "magnitudeVectorField") {
-      // if no vector field is selected: timeselect of heatmap
-      showTimeSelect(selectedHMParameter);
-    } else if (selectedVFParameter != "None"){
-      // if vectorfield is selected: show heatmap at current time
-      displayParameters(selectedTime);
-      // TODO: what if selectedHMParameter does not have a message with selectedTime?
-    }
-  });
-
-  document.getElementById('vectorFieldParameterSelect').addEventListener('change', (e) => {
-    const selectedVFParameter = e.target.value;
-    const selectedHMParameter = document.getElementById('heatMapParameterSelect').value;
-    if (selectedVFParameter != "None") {
-      const option = document.getElementById("magnitudeVectorFieldOption").disabled = false;
-      showTimeSelect(selectedVFParameter);
-    } else {
-      if  (selectedHMParameter == "magnitudeVectorField") {
-        document.getElementById('heatMapParameterSelect').value = "None";
+  document
+    .getElementById("heatMapParameterSelect")
+    .addEventListener("change", (e) => {
+      const selectedHMParameter = e.target.value;
+      const selectedVFParameter = document.getElementById(
+        "vectorFieldParameterSelect",
+      ).value;
+      if (
+        selectedVFParameter == "None" &&
+        selectedHMParameter != "magnitudeVectorField"
+      ) {
+        // if no vector field is selected: timeselect of heatmap
+        showTimeSelect(selectedHMParameter);
+      } else if (selectedVFParameter != "None") {
+        // if vectorfield is selected: show heatmap at current time
+        displayParameters(selectedTime);
+        // TODO: what if selectedHMParameter does not have a message with selectedTime?
       }
-      const option = document.getElementById("magnitudeVectorFieldOption").disabled = true;
-      showTimeSelect(selectedHMParameter);
-    }
-  });
+    });
 
-  document.getElementById('timestampSelect').addEventListener('change', (e) => {
+  document
+    .getElementById("vectorFieldParameterSelect")
+    .addEventListener("change", (e) => {
+      const selectedVFParameter = e.target.value;
+      const selectedHMParameter = document.getElementById(
+        "heatMapParameterSelect",
+      ).value;
+      if (selectedVFParameter != "None") {
+        const option = (document.getElementById(
+          "magnitudeVectorFieldOption",
+        ).disabled = false);
+        showTimeSelect(selectedVFParameter);
+      } else {
+        if (selectedHMParameter == "magnitudeVectorField") {
+          document.getElementById("heatMapParameterSelect").value = "None";
+        }
+        const option = (document.getElementById(
+          "magnitudeVectorFieldOption",
+        ).disabled = true);
+        showTimeSelect(selectedHMParameter);
+      }
+    });
+
+  document.getElementById("timestampSelect").addEventListener("change", (e) => {
     selectedTime = Number(e.target.value);
     displayParameters(selectedTime);
   });
 
-  document.getElementById('nowTimestampButton').addEventListener("click", () => {
-    const select = document.getElementById('timestampSelect');
-    const availableTimes = Array.from(select.options).map(((o) => Number(o.value)));
-    selectedTime = findNextOrEqualTimestamp(Math.floor(Date.now() / 1000), availableTimes);
-    select.value = selectedTime;
-    displayParameters(selectedTime);
-  });
+  document
+    .getElementById("nowTimestampButton")
+    .addEventListener("click", () => {
+      const select = document.getElementById("timestampSelect");
+      const availableTimes = Array.from(select.options).map((o) =>
+        Number(o.value),
+      );
+      selectedTime = findNextOrEqualTimestamp(
+        Math.floor(Date.now() / 1000),
+        availableTimes,
+      );
+      select.value = selectedTime;
+      displayParameters(selectedTime);
+    });
 
-  document.getElementById('nextTimestampButton').addEventListener("click", () => {
-    const select = document.getElementById('timestampSelect');
-    const availableTimes = Array.from(select.options).map(((o) => Number(o.value)));
-    selectedTime = findNextTimestamp(selectedTime, availableTimes);
-    select.value = selectedTime;
-    displayParameters(selectedTime);
-  });
+  document
+    .getElementById("nextTimestampButton")
+    .addEventListener("click", () => {
+      const select = document.getElementById("timestampSelect");
+      const availableTimes = Array.from(select.options).map((o) =>
+        Number(o.value),
+      );
+      selectedTime = findNextTimestamp(selectedTime, availableTimes);
+      select.value = selectedTime;
+      displayParameters(selectedTime);
+    });
 
-  document.getElementById('prevTimestampButton').addEventListener("click", () => {
-    const select = document.getElementById('timestampSelect');
-    const availableTimes = Array.from(select.options).map(((o) => Number(o.value)));
-    selectedTime = findPreviousTimestamp(selectedTime, availableTimes);
-    select.value = selectedTime;
-    displayParameters(selectedTime);
-  });
+  document
+    .getElementById("prevTimestampButton")
+    .addEventListener("click", () => {
+      const select = document.getElementById("timestampSelect");
+      const availableTimes = Array.from(select.options).map((o) =>
+        Number(o.value),
+      );
+      selectedTime = findPreviousTimestamp(selectedTime, availableTimes);
+      select.value = selectedTime;
+      displayParameters(selectedTime);
+    });
 
-  map.on('click', function(e) {
+  map.on("click", function (e) {
     const lat = e.latlng.lat;
     const lon = e.latlng.lng;
-    popupClosestGridPoint(lat, lon)
+    popupClosestGridPoint(lat, lon);
   });
 
   // Initial update
   updateZoomLevel();
 
   // Update on zoom end
-  map.on('zoomend', updateZoomLevel);
+  map.on("zoomend", updateZoomLevel);
 });
