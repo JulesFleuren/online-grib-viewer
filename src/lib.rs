@@ -65,23 +65,13 @@ pub fn get_available_timestamps(bytes: &[u8], key: &str) -> Result<Vec<JsValue>,
     let mut times: HashSet<i64> = HashSet::new();
     let (discipline, category, parameter) = grib_parameter_from_key(key)?;
 
-    for (index, message) in grib2.iter() {
-        let d = message.indicator().discipline;
-        let prod_def = message.prod_def();
-        let Some(c) = prod_def.parameter_category() else {
-            warn!("Unsupported product definition template number: {}, skipping message {:?}", prod_def.prod_tmpl_num(), index);
+    for (index, message) in iter_messages_of_parameter(&grib2, discipline, category, parameter) {
+        let temporal_info = grib::TemporalInfo::from(&message.temporal_raw_info());
+        if let Some(forecast_time) = temporal_info.forecast_time_target {
+            times.insert(forecast_time.timestamp());
+        } else {
+            warn!("Message with invalid forecast time, skipping message {:?}", index);
             continue;
-            };
-        let p = prod_def.parameter_number().expect("parameter_category() should have failed");
-
-        if d == discipline && c == category && p == parameter {
-            let temporal_info = grib::TemporalInfo::from(&message.temporal_raw_info());
-            if let Some(forecast_time) = temporal_info.forecast_time_target {
-                times.insert(forecast_time.timestamp());
-            } else {
-                warn!("Message with invalid forecast time, skipping message {:?}", index);
-                continue;
-            }
         }
     }
 
@@ -211,37 +201,26 @@ pub fn find_min_max_value(bytes: &[u8], key: &str) -> Result<JsValue, JsValue> {
     let (discipline, category, parameter) = grib_parameter_from_key(key)?;
 
     let (mut param_min, mut param_max) = (f32::MAX, f32::MIN);
-    for (index, message) in grib2.iter() {
-        let d = message.indicator().discipline;
-        let prod_def = message.prod_def();
-        let Some(c) = prod_def.parameter_category() else {
-            warn!("Unsupported product definition template number: {}, skipping message {:?}", prod_def.prod_tmpl_num(), index);
-            continue;
-            };
-        let p = prod_def.parameter_number().expect("parameter_category() should have failed");
+    for (index, message) in iter_messages_of_parameter(&grib2, discipline, category, parameter) {
+        let decoder = grib::Grib2SubmessageDecoder::from(message)
+            .map_err(|e| GribViewerError::from(e))?;
+        let mut values_iter = decoder.dispatch()
+            .map_err(|e| GribViewerError::from(e))?;
 
-        // find message with matching discipline, category and parameter
-        if d == discipline && c == category && p == parameter {
-            let decoder = grib::Grib2SubmessageDecoder::from(message)
-                .map_err(|e| GribViewerError::from(e))?;
-            let mut values_iter = decoder.dispatch()
-                .map_err(|e| GribViewerError::from(e))?;
+        let first = match values_iter.next() {
+            Some(val) => (val, val),
+            None => {
+                warn!("Grib message {:?} is empty, skipping message", index);
+                continue;
+            }
+        };
 
-            let first = match values_iter.next() {
-                Some(val) => (val, val),
-                None => {
-                    warn!("Grib message {:?} is empty, skipping message", index);
-                    continue;
-                }
-            };
-
-            // iterate over all values in message and find the min and max value (skipping Nan's)
-            let (message_min, message_max) = values_iter.filter(|&x| !x.is_nan()).fold(first, |(min, max), val| {
-                (min.min(val), max.max(val))
-            });
-            param_min = param_min.min(message_min);
-            param_max = param_max.max(message_max);
-        }
+        // iterate over all values in message and find the min and max value (skipping Nan's)
+        let (message_min, message_max) = values_iter.filter(|&x| !x.is_nan()).fold(first, |(min, max), val| {
+            (min.min(val), max.max(val))
+        });
+        param_min = param_min.min(message_min);
+        param_max = param_max.max(message_max);
     }
 
     if param_min == f32::MAX && param_max == f32::MIN {

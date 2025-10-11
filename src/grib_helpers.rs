@@ -1,7 +1,45 @@
-use grib::{GridDefinitionTemplateValues};
+use grib::{GridDefinitionTemplateValues, Grib2, SubMessage, MessageIndex};
 use log::warn;
+use std::io::Read;
 
 use crate::error::GribViewerError;
+
+/// Filter grib.iter() so that the iterator only yields submessages with the right parameter
+pub(crate) fn iter_messages_of_parameter<'a, R: Read>(
+    grib: &'a Grib2<R>,
+    discipline: u8,
+    category: u8,
+    parameter: u8,
+) -> impl Iterator<Item = (MessageIndex, SubMessage<'a, R>)> + 'a
+{
+    grib.iter().filter(move |(index, message)| {
+        let d = message.indicator().discipline;
+
+        let prod_def = message.prod_def();
+
+        let Some(c) = prod_def.parameter_category() else {
+            warn!(
+                "Unsupported product definition template number: {}, skipping message {:?}",
+                prod_def.prod_tmpl_num(),
+                index
+            );
+            return false;
+        };
+
+        let Some(p) = prod_def.parameter_number() else {
+            warn!(
+                "Unsupported product definition template number: {}, skipping message {:?}",
+                prod_def.prod_tmpl_num(),
+                index
+            );
+            return false;
+        };
+
+        // If all three are matched, let the iterator return this message
+        d == discipline && c == category && p == parameter
+    })
+}
+
 
 pub(crate) fn get_grid_and_values(
     byte_string: &[u8],
