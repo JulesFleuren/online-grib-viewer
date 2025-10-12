@@ -283,7 +283,11 @@ function displayHeatmap(key, time) {
       heatmapSettings = settings[selectedVectorFieldParameter];
     } else {
       let res = find_min_max_magnitude(gribBytes, u_key, v_key);
-      heatmapSettings = { colorMin: res.min, colorMax: res.max };
+      heatmapSettings = {
+        colorMin: res.min,
+        colorMax: res.max,
+        scaleMax: res.max,
+      };
       settings[selectedVectorFieldParameter] = heatmapSettings;
     }
 
@@ -532,7 +536,12 @@ function findPreviousTimestamp(timestamp, timestampArray) {
 init().then(() => {
   // epoch time in seconds instead of miliseconds
   selectedTime = Math.floor(Date.now() / 1000);
-  map = L.map("map").setView([0, 0], 2);
+  map = L.map("map", {
+    fullscreenControl: true,
+    fullscreenControlOptions: {
+      position: "topleft",
+    },
+  }).setView([0, 0], 2);
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution:
       '&copy <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> contributors',
