@@ -29,10 +29,11 @@ use serde::Deserialize;
 /// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 use std::collections::HashMap;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Default)]
 #[serde(rename_all = "PascalCase")]
 pub enum ArrowType {
     PivotTip,
+    #[default]
     PivotCenter,
     WindBarb,
 }

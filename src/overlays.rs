@@ -4,24 +4,35 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::f32;
 use std::fmt::Write;
+use std::iter::zip;
 
 use crate::error::GribViewerError;
 use crate::projection::{epsg_3857_projection, inverse_epsg_3857_projection};
 use crate::windbarbs::{ArrowType, get_arrow_path};
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct HeatmapOverlaySettings {
     pub color_min: Option<f32>,
     pub color_max: Option<f32>,
     #[serde(default)] // default: false
     pub remove_out_of_bounds: bool,
-    #[serde(default = "default_pixels_per_point")]
+    #[serde(default = "_default_pixels_per_point")]
     pub pixels_per_point: usize,
 }
 
-fn default_pixels_per_point() -> usize {
+const fn _default_pixels_per_point() -> usize {
     3
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct VectorFieldOverlaySettings {
+    #[serde(default)] // default PivotCenter
+    pub arrow_type: ArrowType,
+    #[serde(default)] // default false
+    pub scale_arrow: bool,
+    pub scale_max: Option<f32>,
 }
 
 #[derive(Serialize)]
@@ -52,7 +63,7 @@ pub(crate) fn generate_vector_field_svg_overlay(
     u: Vec<f32>,
     v: Vec<f32>,
     zoom_level: i64,
-    arrow_type: ArrowType,
+    settings: VectorFieldOverlaySettings,
 ) -> Result<SvgOverlay, GribViewerError> {
     // TODO: check if u and v both have the size as the grid
     let (lat_1d, lon_1d) = get_lat_lon_1d(grid)?;
@@ -83,6 +94,18 @@ pub(crate) fn generate_vector_field_svg_overlay(
 
     let avg_dx = width / (n_lon + 1) as f32;
     let avg_dy = height / (n_lat + 1) as f32;
+    let scale_max = if settings.scale_arrow {
+        // if we want to scale the arrows set scale_max to either settings.scale_max, or to the max magnitude
+        Some(match settings.scale_max {
+            Some(s_m) => s_m,
+            None => {
+                zip(u.iter(), v.iter()).fold(0.0_f32, |val, (u, v)| val.max((u * u + v * v).sqrt()))
+            }
+        })
+    } else {
+        // if we don't want to scale the arrows, set scale_max to None
+        None
+    };
 
     let mut svg_string = String::new();
     // SVG header
@@ -112,8 +135,20 @@ pub(crate) fn generate_vector_field_svg_overlay(
 
             let (x, y) = epsg_3857_projection(lat_1d[j], lon_1d[i]);
 
-            let barb_path =
-                get_arrow_path(&arrow_type, magnitude, 180.0 + direction, (x, -y), scale);
+            let magnitude_scale;
+            if let Some(scale_max) = scale_max {
+                magnitude_scale = (magnitude / scale_max).clamp(0.0, 1.0)
+            } else {
+                magnitude_scale = 1.0;
+            }
+
+            let barb_path = get_arrow_path(
+                &settings.arrow_type,
+                magnitude,
+                180.0 + direction,
+                (x, -y),
+                scale * magnitude_scale,
+            );
             svg_string.push_str(&barb_path);
         }
     }

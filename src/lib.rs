@@ -11,7 +11,6 @@ use crate::error::*;
 use crate::grib_helpers::*;
 use crate::math::*;
 use crate::overlays::*;
-use crate::windbarbs::*;
 
 pub mod error;
 pub mod grib_helpers;
@@ -184,10 +183,10 @@ pub fn vector_field_overlay(
     key_v: &str,
     time: i64,
     zoom_level: i64,
-    arrow_type: &str,
+    settings: JsValue,
 ) -> Result<JsValue, JsValue> {
-    let arrow_type: ArrowType = serde_plain::from_str(arrow_type)
-        .map_err(|e| GribViewerError::Other(format!("Invalid arrow type: {}", e)))?;
+    let settings = serde_wasm_bindgen::from_value(settings)
+        .map_err(|e| GribViewerError::Other(format!("Error deserializing settings: {}", e)))?;
 
     let param_u = grib_parameter_from_key(key_u)?;
     let index_u = find_grib_index(bytes, param_u.0, param_u.1, param_u.2, time)?;
@@ -199,7 +198,7 @@ pub fn vector_field_overlay(
     let (grid, u) = get_grid_and_values(bytes, index_u)?;
     let (_grid, v) = get_grid_and_values(bytes, index_v)?;
 
-    let svg_overlay = generate_vector_field_svg_overlay(&grid, u, v, zoom_level, arrow_type)?;
+    let svg_overlay = generate_vector_field_svg_overlay(&grid, u, v, zoom_level, settings)?;
 
     Ok(serde_wasm_bindgen::to_value(&svg_overlay)?)
 }
@@ -209,9 +208,9 @@ pub fn heatmap_overlay(
     bytes: &[u8],
     key: &str,
     time: i64,
-    heatmap_overlay_settings: JsValue,
+    settings: JsValue,
 ) -> Result<JsValue, JsValue> {
-    let heatmap_overlay_settings = serde_wasm_bindgen::from_value(heatmap_overlay_settings)
+    let settings = serde_wasm_bindgen::from_value(settings)
         .map_err(|e| GribViewerError::Other(format!("Error deserializing settings: {}", e)))?;
 
     let param = grib_parameter_from_key(key)?;
@@ -219,7 +218,7 @@ pub fn heatmap_overlay(
 
     let (grid, values) = get_grid_and_values(bytes, index)?;
 
-    let image_overlay = generate_heatmap_overlay(&grid, values, heatmap_overlay_settings)?;
+    let image_overlay = generate_heatmap_overlay(&grid, values, settings)?;
 
     Ok(serde_wasm_bindgen::to_value(&image_overlay)?)
 }

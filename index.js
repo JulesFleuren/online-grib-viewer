@@ -34,9 +34,12 @@ let selectedTime = null;
 let overlayBounds = null;
 
 let settings = {
-  grib2_0_1_52: { colorMin: 0.001, colorMax: 100.001, removeOutOfBounds: true }, // total precipitation rate
-  // "vector:grib2_0_2_2,grib2_0_2_3": { colorMin: 0, colorMax: 35.0 }, // wind
-  // "vector:grib2_10_1_2,grib2_10_1_3": { colorMin: 0, arrowType: ArrowType.PIVOT_CENTER } // current
+  "vector:grib2_0_2_2,grib2_0_2_3": {
+    arrowType: ArrowType.WIND_BARB,
+    scaleArrow: false,
+    colorMin: 0,
+    colorMax: 35.0,
+  }, // wind
 };
 
 function clearHeatMap() {
@@ -184,15 +187,27 @@ function markAllPoints(lat, lon) {
 function displayVectorField(u_key, v_key, time) {
   clearVectorField();
 
+  let vectorFieldSettings;
+  if (`vector:${u_key},${v_key}` in settings) {
+    vectorFieldSettings = settings[`vector:${u_key},${v_key}`];
+  } else {
+    // By default, colorMin and colorMax are set to the min and max occuring value in the whole file, to ensure that
+    // it is easy to compare two time stamps
+    let res = find_min_max_magnitude(gribBytes, u_key, v_key);
+    vectorFieldSettings = { scaleMax: res.max, scaleArrow: true };
+    settings[`vector:${u_key},${v_key}`] = vectorFieldSettings;
+  }
+
   // generate wind barb overlay
   let zoomLevel = map.getZoom();
+  console.log(vectorFieldSettings);
   let svgOverlay = vector_field_overlay(
     gribBytes,
     u_key,
     v_key,
     BigInt(time),
     BigInt(zoomLevel),
-    ArrowType.WIND_BARB,
+    vectorFieldSettings,
   );
 
   // maxZoomLevel is the highest zoomLevel for which an svgOverlay is generated, for all higher zoomLevels the
@@ -216,7 +231,7 @@ function displayVectorField(u_key, v_key, time) {
       v_key,
       BigInt(time),
       BigInt(zoomLevel),
-      ArrowType.WIND_BARB,
+      vectorFieldSettings,
     );
     // svgOverlay.maxZoomLevel, svgOverlay.minLat, ..., svgOverlay.maxLon are independent of zoomLevel
   }
@@ -229,13 +244,8 @@ function displayVectorField(u_key, v_key, time) {
   });
   const vecFieldUrl = URL.createObjectURL(svgBlob);
 
-  const vecFieldBounds = [
-    [svgOverlay.minLat, svgOverlay.minLon],
-    [svgOverlay.maxLat, svgOverlay.maxLon],
-  ];
-
   arrowLayers.push(
-    L.imageOverlay(vecFieldUrl, vecFieldBounds, { opacity: 1.0 }).addTo(map),
+    L.imageOverlay(vecFieldUrl, overlayBounds, { opacity: 1.0 }).addTo(map),
   );
 
   // build a cache of layers at different zoom levels
@@ -252,7 +262,7 @@ function displayVectorField(u_key, v_key, time) {
       v_key,
       BigInt(time),
       BigInt(zl),
-      ArrowType.WIND_BARB,
+      vectorFieldSettings,
     );
     arrowZoomLayers[zl] = svgOverlay;
   }
@@ -282,11 +292,15 @@ function displayHeatmap(key, time) {
     if (selectedVectorFieldParameter in settings) {
       heatmapSettings = settings[selectedVectorFieldParameter];
     } else {
+      // By default, colorMin and colorMax are set to the min and max occuring value in the whole file, to ensure that
+      // it is easy to compare two time stamps
       let res = find_min_max_magnitude(gribBytes, u_key, v_key);
       heatmapSettings = {
         colorMin: res.min,
         colorMax: res.max,
-        scaleMax: res.max,
+        // scaleMax: res.max,
+        scaleMax: 1,
+        scaleArrow: true,
       };
       settings[selectedVectorFieldParameter] = heatmapSettings;
     }
@@ -302,6 +316,8 @@ function displayHeatmap(key, time) {
     if (key in settings) {
       heatmapSettings = settings[key];
     } else {
+      // By default, colorMin and colorMax are set to the min and max occuring value in the whole file, to ensure that
+      // it is easy to compare two time stamps
       let res = find_min_max_value(gribBytes, key);
       heatmapSettings = { colorMin: res.min, colorMax: res.max };
       settings[key] = heatmapSettings;
