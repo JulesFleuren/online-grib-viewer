@@ -39,7 +39,13 @@ let settings = {
     scaleArrow: false,
     colorMin: 0,
     colorMax: 35.0,
-  }, // wind
+  },
+  // "vector:grib2_10_1_2,grib2_10_1_3": {
+  //   arrowType: ArrowType.WIND_BARB,
+  //   scaleArrow: false,
+  //   colorMin: 0,
+  //   colorMax: 10.0,
+  // }, // current
 };
 
 function clearHeatMap() {

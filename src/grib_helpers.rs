@@ -171,3 +171,65 @@ pub(crate) fn find_grib_index(
         discipline, category, parameter, time
     )))
 }
+
+/// For regular grids: get the occuring lats and longs from lowest to highest.
+///
+/// Usually values will be between 0 and 360 degrees, except when they cross 0 longitude, then longitudes can be below
+/// 0, to ensure that the longitudes do not jump from 360 to 0.
+pub(crate) fn get_lat_lon_1d_without_jump(
+    grid: &GridDefinitionTemplateValues,
+) -> Result<(Vec<f32>, Vec<f32>), GribViewerError> {
+    let (ni, nj) = grid.grid_shape();
+    let mut lat = vec![0_f32; nj as usize];
+    let mut lon = vec![0_f32; ni as usize];
+    match grid {
+        GridDefinitionTemplateValues::Template0(grid) => {
+            // TODO: extracting the 1d lats and lons is convoluted, but there doesn't seem to be an easy way to do it.
+            // The RegularGridIterator has the two arrays we are looking for as fields, but they are private. Perhaps
+            // open an issue on grib-rs?
+            let latlons = grid.latlons()?;
+            let (lat_2d, lon_2d): (Vec<f32>, Vec<f32>) = latlons.unzip();
+            for (idx, (i, j)) in grid.ij()?.enumerate() {
+                if i == 0 {
+                    lat[j] = lat_2d[idx];
+                }
+                if j == 0 {
+                    lon[i] = lon_2d[idx];
+                }
+            }
+        }
+        GridDefinitionTemplateValues::Template20(_) => {
+            return Err(GribViewerError::Other(
+                "1d lat/lon not implemented for Polar Stereographic grid".into(),
+            ));
+        }
+        GridDefinitionTemplateValues::Template30(_) => {
+            // Lambert grid logic here
+            return Err(GribViewerError::Other(
+                "1d lat/lon not implemented for Lambert grid".into(),
+            ));
+        }
+        GridDefinitionTemplateValues::Template40(grid) => {
+            let latlons = grid.latlons()?;
+            let (lat_2d, lon_2d): (Vec<f32>, Vec<f32>) = latlons.unzip();
+            for (i, j) in grid.ij()? {
+                if i == 0 {
+                    lat[j] = lat_2d[j];
+                }
+                if j == 0 {
+                    lon[i] = lon_2d[i];
+                }
+            }
+        }
+    }
+    if lon[0] > lon[ni - 1] {
+        for i in 0..nj {
+            if lon[i] > lon[ni - 1] {
+                lon[i] -= 360.0;
+            } else {
+                break;
+            }
+        }
+    }
+    return Ok((lat, lon));
+}

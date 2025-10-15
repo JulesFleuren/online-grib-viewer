@@ -1,4 +1,5 @@
 use serde::Deserialize;
+use std::collections::HashMap;
 /// This file contains SVG paths for different wind barb representations. It is modified
 /// from the original source at https://github.com/qulle/svg-wind-barbs. It has the following license:
 ///
@@ -27,7 +28,6 @@ use serde::Deserialize;
 /// CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 /// OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 /// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-use std::collections::HashMap;
 
 #[derive(Debug, Deserialize, Default)]
 #[serde(rename_all = "PascalCase")]
@@ -52,7 +52,7 @@ static ARROW_PATHS: std::sync::LazyLock<HashMap<&str, &str>> = std::sync::LazyLo
         ),
         (
             "knot0",
-            "<path fill=\"#1A232D\" transform-origin=\"125 125\" transform=\"translate({TRANSLATE}) rotate({ROTATE}) scale({SCALE})\" d=\"M125,120c2.762,0,5,2.239,5,5c0,2.762-2.238,5-5,5c-2.761,0-5-2.238-5-5C120,122.239,122.239,120,125,120z\"/><path fill=\"none\" stroke=\"#1A232D\" stroke-width=\"2\" transform-origin=\"125 125\" transform=\"translate({TRANSLATE}) rotate({ROTATE}) scale({SCALE})\" d=\"M125,115c5.523,0,10,4.477,10,10c0,5.523-4.477,10-10,10 c-5.523,0-10-4.477-10-10C115,119.477,119.477,115,125,115z \"/>",
+            "<path fill=\"#1A232D\" transform-origin=\"125 125\" transform=\"translate({TRANSLATE}) rotate({ROTATE}) scale({SCALE})\" d=\"M125,120c2.762,0,5,2.239,5,5c0,2.762-2.238,5-5,5c-2.761,0-5-2.238-5-5C120,122.239,122.239,120,125,120z\"/><path fill=\"none\" stroke=\"#1A232D\" stroke-width=\"2\" transform-origin=\"125 125\" transform=\"translate({TRANSLATE}) rotate({ROTATE}) scale({SCALE})\" d=\"M125,115c5.523,0,10,4.477,10,10c0,5.523-4.477,10-10,10 c-5.523,0-10-4.477-10-10C115,119.477,119.477,115,125,115z\"/>",
         ),
         (
             "knot2",
@@ -249,7 +249,8 @@ pub fn get_arrow_path(
     svg_path
         .replace(
             "{TRANSLATE}",
-            &format!("{:.2} {:.2}", translate.0, translate.1),
+            // all svg paths are centered at 125, 125, so for the center to end up at the give coordinates, 125 must be subtracted
+            &format!("{:.2} {:.2}", translate.0 - 125.0, translate.1 - 125.0),
         )
         .replace("{ROTATE}", &format!("{:.2}", rotate))
         .replace("{SCALE}", &format!("{:.4}", scale))

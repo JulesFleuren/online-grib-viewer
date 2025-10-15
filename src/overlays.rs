@@ -7,7 +7,8 @@ use std::fmt::Write;
 use std::iter::zip;
 
 use crate::error::GribViewerError;
-use crate::projection::{epsg_3857_projection, inverse_epsg_3857_projection};
+use crate::grib_helpers::get_lat_lon_1d_without_jump;
+use crate::projection::Epsg3857Projection;
 use crate::windbarbs::{ArrowType, get_arrow_path};
 
 #[derive(Deserialize, Debug)]
@@ -65,8 +66,12 @@ pub(crate) fn generate_vector_field_svg_overlay(
     zoom_level: i64,
     settings: VectorFieldOverlaySettings,
 ) -> Result<SvgOverlay, GribViewerError> {
+    // at the equator, two points one degree apart, are projected 150 px apart
+    let projection = Epsg3857Projection::from_radius(250_f64.to_degrees());
+    // let projection = Epsg3857Projection::default();
+
     // TODO: check if u and v both have the size as the grid
-    let (lat_1d, lon_1d) = get_lat_lon_1d(grid)?;
+    let (lat_1d, lon_1d) = get_lat_lon_1d_without_jump(grid)?;
     let index_map = get_index_map(grid)?;
 
     let n_lat = lat_1d.len();
@@ -77,20 +82,20 @@ pub(crate) fn generate_vector_field_svg_overlay(
     if lat_1d.len() == 1 || lon_1d.len() == 1 {
         todo!("lat or lon only has 1 element")
     }
-
     // corners of the overlay. The overlay extends half a cell beyond the corners of the grid.
     let min_lat = lat_1d[0] - (lat_1d[1] - lat_1d[0]) / 2.0_f32;
     let max_lat = lat_1d[lat_1d.len() - 1] + (lat_1d[lat_1d.len() - 1] - lat_1d[lat_1d.len() - 2]);
     let min_lon = lon_1d[0] - (lon_1d[1] - lon_1d[0]) / 2.0_f32;
     let max_lon = lon_1d[lon_1d.len() - 1] + (lon_1d[lon_1d.len() - 1] - lon_1d[lon_1d.len() - 2]);
 
-    let (min_x_overlay, mut min_y_overlay) = epsg_3857_projection(min_lat, min_lon);
-    let (max_x_overlay, mut max_y_overlay) = epsg_3857_projection(max_lat, max_lon);
+    let (min_x_overlay, mut min_y_overlay) = projection.project(min_lat, min_lon);
+    let (max_x_overlay, max_y_overlay) = projection.project(max_lat, max_lon);
     let width = max_x_overlay - min_x_overlay;
     let height = max_y_overlay - min_y_overlay;
 
     // reverse y because origin of svg coordinate system is at top left instead of bottom left
-    (min_y_overlay, max_y_overlay) = (-max_y_overlay, -min_y_overlay);
+    // (min_y_overlay, max_y_overlay) = (-max_y_overlay, -min_y_overlay);
+    min_y_overlay = -max_y_overlay;
 
     let avg_dx = width / (n_lon + 1) as f32;
     let avg_dy = height / (n_lat + 1) as f32;
@@ -133,7 +138,7 @@ pub(crate) fn generate_vector_field_svg_overlay(
             let magnitude = (u_val.powi(2) + v_val.powi(2)).sqrt();
             let direction = 90.0 - v_val.atan2(u_val).to_degrees();
 
-            let (x, y) = epsg_3857_projection(lat_1d[j], lon_1d[i]);
+            let (x, y) = projection.project(lat_1d[j], lon_1d[i]);
 
             let magnitude_scale;
             if let Some(scale_max) = scale_max {
@@ -169,7 +174,8 @@ pub(crate) fn generate_heatmap_overlay(
     values: Vec<f32>,
     settings: HeatmapOverlaySettings,
 ) -> Result<ImageOverlay, GribViewerError> {
-    let (lat_1d, lon_1d) = get_lat_lon_1d(grid)?;
+    let projection = Epsg3857Projection::unit_projection();
+    let (lat_1d, lon_1d) = get_lat_lon_1d_without_jump(grid)?;
     let index_map = get_index_map(grid)?;
 
     let n_lat = lat_1d.len();
@@ -197,8 +203,8 @@ pub(crate) fn generate_heatmap_overlay(
     let min_lon = lon_1d[0] - (lon_1d[1] - lon_1d[0]) / 2.0_f32;
     let max_lon = lon_1d[lon_1d.len() - 1] + (lon_1d[lon_1d.len() - 1] - lon_1d[lon_1d.len() - 2]);
 
-    let (min_x_overlay, min_y_overlay) = epsg_3857_projection(min_lat, min_lon);
-    let (max_x_overlay, max_y_overlay) = epsg_3857_projection(max_lat, max_lon);
+    let (min_x_overlay, min_y_overlay) = projection.project(min_lat, min_lon);
+    let (max_x_overlay, max_y_overlay) = projection.project(max_lat, max_lon);
 
     let color_max = match settings.color_max {
         Some(c) => c,
@@ -237,7 +243,7 @@ pub(crate) fn generate_heatmap_overlay(
             let x = min_x_overlay + (j_px as f32) * width_single_pixel + width_single_pixel * 0.5;
             // y is reversed since images have origin at top left
             let y = max_y_overlay - (i_px as f32) * height_single_pixel - height_single_pixel * 0.5;
-            let (lat, lon) = inverse_epsg_3857_projection(x, y);
+            let (lat, lon) = projection.unproject(x, y);
 
             // if point is still in the same gridcell, reuse the gridpoints of last iteration, otherwise recalculate
             if lon_0 > lon || lon > lon_1 {
@@ -296,14 +302,16 @@ pub(crate) fn generate_heatmap_overlay(
 }
 
 fn index_step_and_scale_based_on_zoom(dx: f32, dy: f32, zoom_level: i64) -> (usize, f32, i64) {
-    let d_min = f32::min(dx, dy);
+    // when scale multiplier = 1.0 the arrows are projection.earth_radius.to_radians() apart (i.e. 250 px apart)
+    static SCALE_MULTIPLIER: f32 = 3.0 / 250.0;
 
-    // the numbers for max_zoom_level and scale_multiplier have been manually selected
-    // max_zoom_level is the zoom level at which all barbs are shown
-    // if d_min = 4096 we want max_zoom_level 10
-    let max_zoom_level = 22 - f32::log2(d_min) as i64;
+    let d_min = f32::min(dx, dy);
     // scale multiplier is the amount by which all barbs are scaled
-    let scale_multiplier = d_min / 100.0;
+    let scale_multiplier = d_min * SCALE_MULTIPLIER;
+
+    // max_zoom_level is the zoom level at which all barbs are shown. When the arrows are 1 degree of longitude apart
+    // (i.e d_min = 250), we want them all to be shown at zoom level 6 => max_zoom_level = 8 + 6
+    let max_zoom_level = 13 - f32::log2(d_min) as i64;
 
     let index_step = usize::max(
         1_usize,
@@ -311,58 +319,6 @@ fn index_step_and_scale_based_on_zoom(dx: f32, dy: f32, zoom_level: i64) -> (usi
     );
     let scale = scale_multiplier * (index_step as f32);
     (index_step, scale, max_zoom_level)
-}
-
-fn get_lat_lon_1d(
-    grid: &GridDefinitionTemplateValues,
-) -> Result<(Vec<f32>, Vec<f32>), GribViewerError> {
-    match grid {
-        GridDefinitionTemplateValues::Template0(grid) => {
-            // TODO: extracting the 1d lats and lons is convoluted, but there doesn't seem to be an easy way to do it.
-            // The RegularGridIterator has the two arrays we are looking for as fields, but they are private. Perhaps
-            // open an issue on grib-rs?
-
-            let latlons = grid.latlons()?;
-            let mut lat = vec![0_f32; grid.nj as usize];
-            let mut lon = vec![0_f32; grid.ni as usize];
-            let (lat_2d, lon_2d): (Vec<f32>, Vec<f32>) = latlons.unzip();
-            for (idx, (i, j)) in grid.ij()?.enumerate() {
-                if i == 0 {
-                    lat[j] = lat_2d[idx];
-                }
-                if j == 0 {
-                    lon[i] = lon_2d[idx];
-                }
-            }
-            return Ok((lat, lon));
-        }
-        GridDefinitionTemplateValues::Template20(_) => {
-            return Err(GribViewerError::Other(
-                "1d lat/lon not implemented for Polar Stereographic grid".into(),
-            ));
-        }
-        GridDefinitionTemplateValues::Template30(_) => {
-            // Lambert grid logic here
-            return Err(GribViewerError::Other(
-                "1d lat/lon not implemented for Lambert grid".into(),
-            ));
-        }
-        GridDefinitionTemplateValues::Template40(grid) => {
-            let latlons = grid.latlons()?;
-            let mut lat = vec![0_f32; grid.nj as usize];
-            let mut lon = vec![0_f32; grid.ni as usize];
-            let (lat_2d, lon_2d): (Vec<f32>, Vec<f32>) = latlons.unzip();
-            for (i, j) in grid.ij()? {
-                if i == 0 {
-                    lat[j] = lat_2d[j];
-                }
-                if j == 0 {
-                    lon[i] = lon_2d[i];
-                }
-            }
-            return Ok((lat, lon));
-        }
-    }
 }
 
 fn get_index_map(
@@ -408,7 +364,7 @@ fn first_bigger_than(sorted_vec: &[f32], target: f32) -> usize {
 mod tests {
     use grib::GridDefinitionTemplateValues;
 
-    use crate::overlays::{first_bigger_than, get_index_map, get_lat_lon_1d};
+    use crate::overlays::{first_bigger_than, get_index_map, get_lat_lon_1d_without_jump};
 
     #[test]
     fn test_get_lat_lon_1d() {
@@ -422,7 +378,7 @@ mod tests {
             scanning_mode: grib::ScanningMode(0b01000000),
         };
         let grid = GridDefinitionTemplateValues::Template0(def);
-        let (lat_1d, lon_1d) = get_lat_lon_1d(&grid).expect("get_lat_lon_1d failed");
+        let (lat_1d, lon_1d) = get_lat_lon_1d_without_jump(&grid).expect("get_lat_lon_1d failed");
         assert_eq!(lat_1d, vec![0.0, 1.0, 2.0]);
         assert_eq!(lon_1d, vec![0.0, 1.0]);
     }
