@@ -23,13 +23,10 @@ const ArrowType = {
 };
 
 let map;
-let heatLayer;
-let arrowLayers = [];
-let arrowZoomLayers = {};
+let heatmapLayer;
+let vectorFieldLayer;
+let vectorFieldZoomLayers = {};
 let gribBytes = null;
-let parameters = [];
-let selectedHeatMapParameter = null;
-let selectedVectorFieldParameter = null;
 let selectedTime = null;
 let overlayBounds = null;
 
@@ -49,22 +46,24 @@ let settings = {
 };
 
 function clearHeatMap() {
-  if (heatLayer) {
-    map.removeLayer(heatLayer);
-    heatLayer = null;
+  if (heatmapLayer) {
+    map.removeLayer(heatmapLayer);
+    heatmapLayer = null;
   }
 }
 
 function clearVectorField() {
-  arrowLayers.forEach((layer) => map.removeLayer(layer));
-  arrowLayers = [];
+  if (vectorFieldLayer) {
+    map.removeLayer(vectorFieldLayer);
+    vectorFieldLayer = null;
+  }
 }
 
 async function showParameterSelect(file) {
   const arrayBuffer = await file.arrayBuffer();
   gribBytes = new Uint8Array(arrayBuffer);
 
-  parameters = get_available_parameters(gribBytes);
+  const parameters = get_available_parameters(gribBytes);
 
   // console.log('Available parameters:', parameters);
 
@@ -250,13 +249,13 @@ function displayVectorField(u_key, v_key, time) {
   });
   const vecFieldUrl = URL.createObjectURL(svgBlob);
 
-  arrowLayers.push(
-    L.imageOverlay(vecFieldUrl, overlayBounds, { opacity: 1.0 }).addTo(map),
-  );
+  vectorFieldLayer = L.imageOverlay(vecFieldUrl, overlayBounds, {
+    opacity: 1.0,
+  }).addTo(map);
 
   // build a cache of layers at different zoom levels
-  arrowZoomLayers = {};
-  arrowZoomLayers[zoomLevel] = svgOverlay;
+  vectorFieldZoomLayers = {};
+  vectorFieldZoomLayers[zoomLevel] = svgOverlay;
 
   for (let zl = minZoomLevel; zl <= maxZoomLevel; zl++) {
     if (zl == zoomLevel) {
@@ -270,7 +269,7 @@ function displayVectorField(u_key, v_key, time) {
       BigInt(zl),
       vectorFieldSettings,
     );
-    arrowZoomLayers[zl] = svgOverlay;
+    vectorFieldZoomLayers[zl] = svgOverlay;
   }
 
   // const data = get_scalar_field(gribBytes, u_key, BigInt(time));
@@ -354,12 +353,12 @@ function displayHeatmap(key, time) {
     [imageOverlay.maxLat, imageOverlay.maxLon],
   ];
 
-  heatLayer = L.imageOverlay(url, bounds, { opacity: 0.4 }).addTo(map);
+  heatmapLayer = L.imageOverlay(url, bounds, { opacity: 0.4 }).addTo(map);
   overlayBounds = bounds;
   // map.fitBounds(bounds);
 }
 
-function displayParameters(time) {
+function displayParameters(selectedTime) {
   const selectedVectorFieldParameter = document.getElementById(
     "vectorFieldParameterSelect",
   ).value;
@@ -368,7 +367,7 @@ function displayParameters(time) {
   ).value;
 
   if (selectedHeatMapParameter != "None") {
-    displayHeatmap(selectedHeatMapParameter, time);
+    displayHeatmap(selectedHeatMapParameter, selectedTime);
   } else {
     clearHeatMap();
   }
@@ -378,7 +377,7 @@ function displayParameters(time) {
       .split(":")[1]
       .split(",");
     if (u_key && v_key) {
-      displayVectorField(u_key, v_key, time);
+      displayVectorField(u_key, v_key, selectedTime);
       // document.getElementById('output').textContent = `Displaying vector field with U key: ${u_key} and V key: ${v_key}`;
     } // TODO: else: something went wrong
     return;
@@ -393,25 +392,23 @@ function updateZoomLevel() {
   zoomLevelDiv.textContent = `Zoom Level: ${map.getZoom()}`;
 
   // If arrow layers exist, update them based on zoom level
-  if (arrowLayers.length > 0) {
+  if (Object.keys(vectorFieldZoomLayers).length > 0) {
     const maxZoom = Math.max(
-      ...Object.keys(arrowZoomLayers).map((zl) => Number(zl)),
+      ...Object.keys(vectorFieldZoomLayers).map((zl) => Number(zl)),
     );
     const minZoom = Math.min(
-      ...Object.keys(arrowZoomLayers).map((zl) => Number(zl)),
+      ...Object.keys(vectorFieldZoomLayers).map((zl) => Number(zl)),
     );
     const currentZoom = map.getZoom();
     if (currentZoom > maxZoom || currentZoom < minZoom) {
       return;
     }
 
-    // Remove existing arrow layers
-    arrowLayers.forEach((layer) => map.removeLayer(layer));
-    arrowLayers = [];
+    clearVectorField();
 
     // Add the appropriate layer for the current zoom level
-    if (arrowZoomLayers[currentZoom]) {
-      const svgOverlay = arrowZoomLayers[currentZoom];
+    if (vectorFieldZoomLayers[currentZoom]) {
+      const svgOverlay = vectorFieldZoomLayers[currentZoom];
       const svgBlob = new Blob([svgOverlay.svgString], {
         type: "image/svg+xml;charset=utf-8",
       });
@@ -422,8 +419,8 @@ function updateZoomLevel() {
         [svgOverlay.maxLat, svgOverlay.maxLon],
       ];
 
-      arrowLayers.push(
-        L.imageOverlay(url, bounds, { opacity: 1.0 }).addTo(map),
+      vectorFieldLayer = L.imageOverlay(url, bounds, { opacity: 1.0 }).addTo(
+        map,
       );
     }
   }
@@ -436,6 +433,7 @@ function popupClosestGridPoint(lat, lon) {
   const selectedHeatMapParameter = document.getElementById(
     "heatMapParameterSelect",
   ).value;
+  const selectedTime = document.getElementById("timestampField").value;
 
   let lat_out, lon_out;
 
