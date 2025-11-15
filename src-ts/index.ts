@@ -203,7 +203,7 @@ function updateDisplayedParameters() {
   const selectedHeatMapParameter = heatMapSelect.value;
 
   if (
-    selectedVectorFieldParameter != "None" &&
+    selectedHeatMapParameter != "None" &&
     selectedHeatMapParameter != "magnitudeVectorField"
   ) {
     // display parameter as heatmap
