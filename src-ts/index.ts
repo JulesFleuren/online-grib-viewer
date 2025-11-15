@@ -380,17 +380,26 @@ init().then(() => {
 
     if (
       selectedVFParameter === "None" &&
-      selectedHMParameter !== "magnitudeVectorField"
+      selectedHMParameter !== "magnitudeVectorField" &&
+      selectedHMParameter !== "None"
     ) {
       showTimeSelect(new GribKey(selectedHMParameter));
     } else if (selectedVFParameter !== "None") {
       updateDisplayedParameters();
+    } else if (
+      selectedVFParameter === "None" &&
+      selectedHMParameter === "None"
+    ) {
+      if (gribOverlayManager) {
+        gribOverlayManager.clearHeatMap();
+        gribOverlayManager.clearVectorField();
+      }
     }
   });
 
   vectorFieldSelect.addEventListener("change", () => {
     const selectedVF = vectorFieldSelect.value;
-    const selectedHM = heatMapSelect.value;
+    let selectedHM = heatMapSelect.value;
 
     const magnitudeOption = document.getElementById(
       "magnitudeVectorFieldOption",
@@ -403,6 +412,15 @@ init().then(() => {
 
     if (!vfSelected && selectedHM === "magnitudeVectorField") {
       heatMapSelect.value = "None";
+      selectedHM = "None";
+    }
+
+    if (!vfSelected && selectedHM === "None") {
+      if (gribOverlayManager) {
+        gribOverlayManager.clearHeatMap();
+        gribOverlayManager.clearVectorField();
+      }
+      return;
     }
 
     // Show time selector based on current active parameter
