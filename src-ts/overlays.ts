@@ -1,10 +1,7 @@
 import type { Map, LatLngBoundsExpression } from "leaflet";
 import L, { LatLngBounds } from "leaflet";
 import type { GribKey } from "./gribKey";
-import {
-  getHeatmapSettings,
-  getVectorFieldSettings,
-} from "./overlaySettings.js";
+import { OverlaySettingsManager } from "./overlaySettings.js";
 import {
   vector_field_overlay,
   heatmap_overlay,
@@ -14,15 +11,21 @@ import {
 class GribOverlay {
   gribBytes: Uint8Array;
   map: Map;
+  overlaySettingsManager: OverlaySettingsManager;
   heatmapLayer: L.ImageOverlay | null;
   vectorFieldLayer: L.ImageOverlay | null;
   vectorFieldZoomLayers: { [zoomLevel: number]: any } | null;
   displayedZoomLevel: number;
   overlayBounds: LatLngBoundsExpression | null;
 
-  constructor(gribBytes: Uint8Array, map: Map) {
+  constructor(
+    gribBytes: Uint8Array,
+    map: Map,
+    overlaySettingsManger: OverlaySettingsManager,
+  ) {
     this.gribBytes = gribBytes;
     this.map = map;
+    this.overlaySettingsManager = overlaySettingsManger;
     this.heatmapLayer = null;
     this.vectorFieldLayer = null;
     this.vectorFieldZoomLayers = null;
@@ -53,7 +56,8 @@ class GribOverlay {
 
     this.clearVectorField();
 
-    const vectorFieldSettings = getVectorFieldSettings(key, this.gribBytes);
+    const vectorFieldSettings =
+      this.overlaySettingsManager.getVectorFieldSettings(key);
 
     // generate wind barb overlay
     let zoomLevel = this.map.getZoom();
@@ -137,7 +141,7 @@ class GribOverlay {
     let imageOverlay;
     // let heatmapSettings;
 
-    const heatmapSettings = getHeatmapSettings(key, this.gribBytes);
+    const heatmapSettings = this.overlaySettingsManager.getHeatmapSettings(key);
 
     if (key.isVectorField) {
       const u_key = key.firstComponent;

@@ -11,7 +11,10 @@ import {
   findNextTimestamp,
   findPreviousTimestamp,
 } from "./timeUtils.js";
-import { loadDefaultSettings } from "./overlaySettings.js";
+import {
+  loadDefaultSettings,
+  OverlaySettingsManager,
+} from "./overlaySettings.js";
 
 // certain parameter pairs are known to be vector fields
 const PARAMETER_PAIRS = {
@@ -22,7 +25,7 @@ const PARAMETER_PAIRS = {
 let map: L.Map | null = null;
 let gribOverlayManager: GribOverlayManager | null = null;
 let selectedTime: bigint = 0n;
-let settings: any[] = [];
+let settings: OverlaySettingsManager | null = null;
 
 async function showParameterSelect(file: File) {
   const arrayBuffer = await file.arrayBuffer();
@@ -33,7 +36,8 @@ async function showParameterSelect(file: File) {
     gribOverlayManager.clearVectorField();
   }
 
-  gribOverlayManager = new GribOverlayManager(gribBytes, map!);
+  settings = await loadDefaultSettings(gribBytes);
+  gribOverlayManager = new GribOverlayManager(gribBytes, map!, settings);
 
   const parameters = get_available_parameters(gribBytes);
 
@@ -340,8 +344,6 @@ init().then(() => {
     attribution:
       '&copy <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> contributors',
   }).addTo(map);
-
-  loadDefaultSettings();
 
   // ===== file input event listener =====
   const fileInput = document.getElementById("fileInput");
