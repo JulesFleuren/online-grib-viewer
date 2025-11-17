@@ -192,9 +192,12 @@ pub(crate) fn generate_heatmap_overlay(
     }
 
     if values.len() != n_lat * n_lon {
-        return Err(GribViewerError::Other(
-            "Length of values is not the same as grid size".into(),
-        ));
+        return Err(GribViewerError::Other(format!(
+            "Length of values ({}) is not the same as grid size ({} x {})",
+            values.len(),
+            n_lat,
+            n_lon,
+        )));
     }
 
     // corners of the overlay. The overlay extends half a cell beyond the corners of the grid.
