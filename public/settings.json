@@ -1,0 +1,15 @@
+{
+  "vector:grib2_0_2_2,grib2_0_2_3": {
+    "arrowType": "WindBarb",
+    "scaleArrow": false,
+    "colorMin": 0,
+    "colorMax": 35.0
+  },
+  "vector:grib2_10_1_2,grib2_10_1_3": {
+    "arrowType": "PivotCenter",
+    "scaleArrow": true,
+    "colorMin": 0,
+    "colorMax": "FileBased",
+    "ScaleMax": "FileBased"
+  }
+}

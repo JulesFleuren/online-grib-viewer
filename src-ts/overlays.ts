@@ -2,15 +2,13 @@ import type { Map, LatLngBoundsExpression } from "leaflet";
 import L, { LatLngBounds } from "leaflet";
 import type { GribKey } from "./gribKey";
 import {
-  createDefaultHeatMapOverlaySettings,
-  createDefaultVectorFieldOverlaySettings,
+  getHeatmapSettings,
+  getVectorFieldSettings,
 } from "./overlaySettings.js";
 import {
   vector_field_overlay,
   heatmap_overlay,
   magnitude_heatmap_overlay,
-  find_min_max_value,
-  find_min_max_magnitude,
 } from "../pkg/online_grib_viewer.js";
 
 class GribOverlay {
@@ -55,20 +53,7 @@ class GribOverlay {
 
     this.clearVectorField();
 
-    let vectorFieldSettings = createDefaultVectorFieldOverlaySettings(
-      this.gribBytes,
-      key,
-    );
-    // let vectorFieldSettings;
-    //   if (`vector:${u_key},${v_key}` in settings) {
-    //     vectorFieldSettings = settings[`vector:${u_key},${v_key}`];
-    //   } else {
-    //     // By default, colorMin and colorMax are set to the min and max occuring value in the whole file, to ensure that
-    //     // it is easy to compare two time stamps
-    //     let res = find_min_max_magnitude(gribBytes, u_key, v_key);
-    //     vectorFieldSettings = { scaleMax: res.max, scaleArrow: true };
-    //     settings[`vector:${u_key},${v_key}`] = vectorFieldSettings;
-    //   }
+    const vectorFieldSettings = getVectorFieldSettings(key, this.gribBytes);
 
     // generate wind barb overlay
     let zoomLevel = this.map.getZoom();
@@ -152,35 +137,11 @@ class GribOverlay {
     let imageOverlay;
     // let heatmapSettings;
 
+    const heatmapSettings = getHeatmapSettings(key, this.gribBytes);
+
     if (key.isVectorField) {
-      // const selectedVectorFieldParameter = document.getElementById(
-      //     "vectorFieldParameterSelect",
-      // ).value;
-      // if (selectedVectorFieldParameter == "None") {
-      //     return;
-      // }
       const u_key = key.firstComponent;
       const v_key = key.secondComponent!;
-
-      const heatmapSettings = createDefaultHeatMapOverlaySettings(
-        this.gribBytes,
-        key,
-      );
-      // if (selectedVectorFieldParameter in settings) {
-      //     heatmapSettings = settings[selectedVectorFieldParameter];
-      // } else {
-      //     // By default, colorMin and colorMax are set to the min and max occuring value in the whole file, to ensure that
-      //     // it is easy to compare two time stamps
-      //     let res = find_min_max_magnitude(gribBytes, u_key, v_key);
-      //     heatmapSettings = {
-      //         colorMin: res.min,
-      //         colorMax: res.max,
-      //         // scaleMax: res.max,
-      //         scaleMax: 1,
-      //         scaleArrow: true,
-      //     };
-      //     settings[selectedVectorFieldParameter] = heatmapSettings;
-      // }
 
       imageOverlay = magnitude_heatmap_overlay(
         this.gribBytes,
@@ -190,20 +151,6 @@ class GribOverlay {
         heatmapSettings,
       );
     } else {
-      const heatmapSettings = createDefaultHeatMapOverlaySettings(
-        this.gribBytes,
-        key,
-      );
-      // if (key in settings) {
-      //     heatmapSettings = settings[key];
-      // } else {
-      //     // By default, colorMin and colorMax are set to the min and max occuring value in the whole file, to ensure that
-      //     // it is easy to compare two time stamps
-      //     let res = find_min_max_value(gribBytes, key);
-      //     heatmapSettings = { colorMin: res.min, colorMax: res.max };
-      //     settings[key] = heatmapSettings;
-      // }
-
       imageOverlay = heatmap_overlay(
         this.gribBytes,
         key.firstComponent,
