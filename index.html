@@ -8,6 +8,53 @@
   <link rel="stylesheet" href="node_modules/leaflet.fullscreen/Control.FullScreen.css" />
   <style>
     #map { height: 500px; margin-top: 1em; }
+    .colorbar-control {
+        border: 2px solid white;
+        border-radius: 4px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        background-color: white;
+        width: 100%;
+    }
+    .colorbar-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .colorbar-img {
+      width: 80%;
+      height: 10px;       /* vertical stretch */
+      border: 1px solid black;  /* black border */
+    }
+
+    .colorbar-ticks {
+      position: relative;
+      width: 80%;
+      height: 15px;
+      margin-top: 4px;
+    }
+
+    .tick {
+      position: absolute;
+      bottom: 0;
+      transform: translateX(-50%);
+    }
+
+    .tick-label {
+      font-size: 10px;
+      white-space: nowrap;
+      transform: translateY(2px);
+    }
+
+    /* Tick line */
+    .tick::before {
+      content: "";
+      display: block;
+      width: 1px;
+      height: 6px;
+      background: black;
+      margin: 0 auto;
+    }
   </style>
 </head>
 <body>

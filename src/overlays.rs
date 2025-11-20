@@ -57,6 +57,9 @@ pub(crate) struct ImageOverlay {
     pub max_lat: f32,
     pub min_lon: f32,
     pub max_lon: f32,
+    pub colorbar_image: Vec<u8>,
+    pub min_value: f32,
+    pub max_value: f32,
 }
 
 pub(crate) fn generate_vector_field_svg_overlay(
@@ -293,6 +296,8 @@ pub(crate) fn generate_heatmap_overlay(
         }
     }
 
+    let colorbar_image = generate_colorbar();
+
     Ok(ImageOverlay {
         image,
         width_px,
@@ -301,7 +306,22 @@ pub(crate) fn generate_heatmap_overlay(
         max_lat,
         min_lon,
         max_lon,
+        colorbar_image,
+        min_value: color_min,
+        max_value: color_max,
     })
+}
+
+fn generate_colorbar() -> Vec<u8> {
+    let pixels_width = 100;
+    let mut colorbar_image = Vec::with_capacity(pixels_width * 4);
+    let color_gradient = colorgrad::preset::turbo();
+
+    for i in 0..pixels_width {
+        let color = color_gradient.at(i as f32 / pixels_width as f32).to_rgba8();
+        colorbar_image.extend_from_slice(&color);
+    }
+    colorbar_image
 }
 
 fn index_step_and_scale_based_on_zoom(dx: f32, dy: f32, zoom_level: i64) -> (usize, f32, i64) {

@@ -16,6 +16,7 @@ import {
   loadDefaultSettings,
   OverlaySettingsManager,
 } from "./overlaySettings.js";
+import { createColorBar } from "./colorbarControl.js";
 
 // certain parameter pairs are known to be vector fields
 const PARAMETER_PAIRS = {
@@ -482,4 +483,6 @@ init().then(() => {
 
   // Update on zoom end
   map.on("zoomend", updateZoomLevel);
+
+  // createColorBar({ position: "bottomleft" }).addTo(map);
 });
