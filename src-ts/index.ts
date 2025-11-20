@@ -1,4 +1,5 @@
 import L from "leaflet";
+import "leaflet.fullscreen";
 import init, {
   get_available_parameters,
   get_available_timestamps,
