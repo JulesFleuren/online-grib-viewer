@@ -7,6 +7,7 @@ import {
   heatmap_overlay,
   magnitude_heatmap_overlay,
 } from "../pkg/online_grib_viewer.js";
+import { createColorBar, ColorbarControl } from "./colorbarControl.js";
 
 class GribOverlay {
   gribBytes: Uint8Array;
@@ -17,6 +18,7 @@ class GribOverlay {
   vectorFieldZoomLayers: { [zoomLevel: number]: any } | null;
   displayedZoomLevel: number;
   overlayBounds: LatLngBoundsExpression | null;
+  colorbarControl: ColorbarControl | null;
 
   constructor(
     gribBytes: Uint8Array,
@@ -31,12 +33,16 @@ class GribOverlay {
     this.vectorFieldZoomLayers = null;
     this.displayedZoomLevel = map.getZoom();
     this.overlayBounds = null;
+    this.colorbarControl = null;
   }
 
   clearHeatMap() {
     if (this.heatmapLayer) {
       this.map.removeLayer(this.heatmapLayer);
       this.heatmapLayer = null;
+    }
+    if (this.colorbarControl) {
+      this.map.removeControl(this.colorbarControl);
     }
   }
 
@@ -188,6 +194,29 @@ class GribOverlay {
     );
     this.overlayBounds = bounds;
     // this.map.fitBounds(bounds);
+
+    const colorbarCanvas = document.createElement("canvas");
+    colorbarCanvas.width = 100;
+    colorbarCanvas.height = 1;
+    const colorbarCtx = colorbarCanvas.getContext("2d");
+    if (!colorbarCtx) {
+      throw new Error("Could not get 2D context from canvas");
+    }
+    const colorbarImageData = new ImageData(
+      new Uint8ClampedArray(imageOverlay.colorbarImage),
+      100,
+      1,
+    );
+    colorbarCtx.putImageData(colorbarImageData, 0, 0);
+    const colorbarUrl = colorbarCanvas.toDataURL();
+    this.colorbarControl = createColorBar(
+      colorbarUrl,
+      imageOverlay.minValue,
+      imageOverlay.maxValue,
+      {
+        position: "bottomleft",
+      },
+    ).addTo(this.map);
   }
 
   updateZoomLevel() {
