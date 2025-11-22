@@ -2,10 +2,16 @@ name: Build WebAssembly + TypeScript and publish to cloudflare pages
 
 on:
   push:
+    paths-ignore:
+      - .gitignore
+      - "**.md"
     branches:
       - main
 
   pull_request:
+    paths-ignore:
+      - .gitignore
+      - "**.md"
     branches:
       - main
 
