@@ -1,6 +1,6 @@
 import type { Map, LatLngBoundsExpression } from "leaflet";
 import L, { LatLngBounds } from "leaflet";
-import type { GribKey } from "./gribKey";
+import type { GribKey } from "./gribKey.js";
 import { OverlaySettingsManager } from "./overlaySettings.js";
 import {
   vector_field_overlay,

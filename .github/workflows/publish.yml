@@ -1,0 +1,92 @@
+name: Build WebAssembly + TypeScript and publish to cloudflare pages
+
+on:
+  push:
+    paths-ignore:
+      - .gitignore
+      - "**.md"
+    branches:
+      - main
+
+  pull_request:
+    paths-ignore:
+      - .gitignore
+      - "**.md"
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ------------------------------
+      # Rust + wasm target
+      # ------------------------------
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: wasm32-unknown-unknown
+          override: true
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      # Optional but recommended: cache Rust dependencies
+      - name: Cache cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust-wasm/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('rust-wasm/Cargo.lock') }}
+
+      # ------------------------------
+      # Build Rust → Wasm
+      # outputs to /pkg/
+      # ------------------------------
+      - name: Build Rust wasm with wasm-pack
+        working-directory: rust-wasm
+        run: wasm-pack build --target web --release --out-dir ../pkg
+
+      # ------------------------------
+      # Node + frontend build
+      # ------------------------------
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build frontend with Vite
+        run: npm run build
+
+      # ------------------------------
+      # Upload final dist/ output
+      # ------------------------------
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: dist
+
+      # ------------------------------
+      # Deploy to cloudflare pages
+      # ------------------------------
+      - name: Deploy
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=online-grib-viewer
+          # Optional: Enable this if you want to have GitHub Deployments triggered
+          # gitHubToken: ${{ secrets.GITHUB_TOKEN }}
