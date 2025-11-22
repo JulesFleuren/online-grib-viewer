@@ -69,6 +69,8 @@ jobs:
 
       - name: Build frontend with Vite
         run: npm run build
+        env:
+          VITE_PROTOMAPS_API_KEY: ${{ secrets.PROTOMAPS_API_KEY }}
 
       # ------------------------------
       # Upload final dist/ output

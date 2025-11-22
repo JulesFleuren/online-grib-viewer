@@ -1,5 +1,6 @@
 import L from "leaflet";
 import "leaflet.fullscreen";
+import { leafletLayer } from "protomaps-leaflet";
 import init, {
   get_available_parameters,
   get_available_timestamps,
@@ -342,10 +343,15 @@ init().then(() => {
       position: "topleft",
     },
   }).setView([0, 0], 2);
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution:
-      '&copy <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-  }).addTo(map);
+
+  const URL = "https://api.protomaps.com/tiles/v4/{z}/{x}/{y}.mvt";
+  const layer = leafletLayer({
+    url: URL + `?key=${import.meta.env.VITE_PROTOMAPS_API_KEY}`,
+    flavor: "light",
+    lang: "en",
+    maxDataZoom: 11,
+  });
+  layer.addTo(map);
 
   // ===== file input event listener =====
   const fileInput = document.getElementById("fileInput");

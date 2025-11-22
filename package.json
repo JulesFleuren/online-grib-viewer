@@ -2,7 +2,8 @@
   "dependencies": {
     "bulma": "^1.0.4",
     "leaflet": "^1.9.4",
-    "leaflet.fullscreen": "^4.0.0"
+    "leaflet.fullscreen": "^4.0.0",
+    "protomaps-leaflet": "^5.1.0"
   },
   "devDependencies": {
     "@types/leaflet": "^1.9.21",
