@@ -337,7 +337,6 @@ function popupClosestGridPoint(lat: number, lon: number) {
 init().then(() => {
   // epoch time in seconds instead of miliseconds
   selectedTime = BigInt(Math.floor(Date.now() / 1000));
-
   map = L.map("map", {
     fullscreenControl: true,
     fullscreenControlOptions: {
@@ -347,8 +346,7 @@ init().then(() => {
 
   const URL = "https://api.protomaps.com/tiles/v4/{z}/{x}/{y}.mvt";
   const layer = leafletLayer({
-    // url: URL + "?key=<key>",
-    url: "./planet_20251120_z11.pmtiles",
+    url: URL + `?key=${import.meta.env.VITE_PROTOMAPS_API_KEY}`,
     flavor: "light",
     lang: "en",
     maxDataZoom: 11,
