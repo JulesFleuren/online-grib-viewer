@@ -3,3 +3,4 @@
 /dist
 *.grb*
 /public/*.pmtiles
+.env
