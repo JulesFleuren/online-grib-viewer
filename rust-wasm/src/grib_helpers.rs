@@ -227,6 +227,8 @@ pub(crate) fn find_grib_index(
     discipline: u8,
     category: u8,
     parameter: u8,
+    surface1: &FixedSurface,
+    surface2: &FixedSurface,
     time: i64,
 ) -> Result<(usize, usize), GribViewerError> {
     let grib2 = grib::from_bytes(bytes)?;
@@ -253,7 +255,21 @@ pub(crate) fn find_grib_index(
             continue;
         };
 
-        if d == discipline && c == category && p == parameter && t.timestamp() == time {
+        let Some((s1, s2)) = prod_def.fixed_surfaces() else {
+            warn!(
+                "Unsupported product definition template number: {}, skipping message {:?}",
+                prod_def.prod_tmpl_num(),
+                index
+            );
+            continue;
+        };
+        if d == discipline
+            && c == category
+            && p == parameter
+            && t.timestamp() == time
+            && s1 == *surface1
+            && s2 == *surface2
+        {
             return Ok((index, subindex));
         }
     }

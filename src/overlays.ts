@@ -53,8 +53,12 @@ class GribOverlay {
     }
   }
 
-  displayVectorField(key: GribKey, time: bigint) {
-    if (!key.isVectorField) {
+  displayVectorField(
+    parameter_key: GribKey,
+    surface_key: string,
+    time: bigint,
+  ) {
+    if (!parameter_key.isVectorField) {
       throw new Error(
         "Only vector fields can be displayed as vector field overlay",
       );
@@ -63,15 +67,15 @@ class GribOverlay {
     this.clearVectorField();
 
     const vectorFieldSettings =
-      this.overlaySettingsManager.getVectorFieldSettings(key);
+      this.overlaySettingsManager.getVectorFieldSettings(parameter_key);
 
     // generate wind barb overlay
     let zoomLevel = this.map.getZoom();
-    console.log(vectorFieldSettings);
     let svgOverlay = vector_field_overlay(
       this.gribBytes,
-      key.firstComponent,
-      key.secondComponent!,
+      parameter_key.firstComponent,
+      parameter_key.secondComponent!,
+      surface_key,
       time,
       BigInt(zoomLevel),
       vectorFieldSettings,
@@ -94,8 +98,9 @@ class GribOverlay {
       zoomLevel = minZoomLevel;
       svgOverlay = vector_field_overlay(
         this.gribBytes,
-        key.firstComponent,
-        key.secondComponent!,
+        parameter_key.firstComponent,
+        parameter_key.secondComponent!,
+        surface_key,
         time,
         BigInt(zoomLevel),
         vectorFieldSettings,
@@ -127,8 +132,9 @@ class GribOverlay {
       }
       const svgOverlay = vector_field_overlay(
         this.gribBytes,
-        key.firstComponent,
-        key.secondComponent!,
+        parameter_key.firstComponent,
+        parameter_key.secondComponent!,
+        surface_key,
         BigInt(time),
         BigInt(zl),
         vectorFieldSettings,
@@ -142,28 +148,31 @@ class GribOverlay {
     // console.log(arrowZoomLayers);
   }
 
-  displayHeatmap(key: GribKey, time: bigint) {
+  displayHeatmap(parameter_key: GribKey, surface_key: string, time: bigint) {
     this.clearHeatMap();
     let imageOverlay;
     // let heatmapSettings;
 
-    const heatmapSettings = this.overlaySettingsManager.getHeatmapSettings(key);
+    const heatmapSettings =
+      this.overlaySettingsManager.getHeatmapSettings(parameter_key);
 
-    if (key.isVectorField) {
-      const u_key = key.firstComponent;
-      const v_key = key.secondComponent!;
+    if (parameter_key.isVectorField) {
+      const u_key = parameter_key.firstComponent;
+      const v_key = parameter_key.secondComponent!;
 
       imageOverlay = magnitude_heatmap_overlay(
         this.gribBytes,
         u_key,
         v_key,
+        surface_key,
         time,
         heatmapSettings,
       );
     } else {
       imageOverlay = heatmap_overlay(
         this.gribBytes,
-        key.firstComponent,
+        parameter_key.firstComponent,
+        surface_key,
         time,
         heatmapSettings,
       );

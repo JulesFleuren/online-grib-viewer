@@ -191,30 +191,19 @@ pub fn get_available_timestamps(
 #[wasm_bindgen]
 pub fn query_grib_message_at_point(
     bytes: &[u8],
-    key: &str,
+    parameter_key: &str,
+    surface_key: &str,
     time: i64,
     query_lat: f32,
     query_lon: f32,
 ) -> Result<JsValue, JsValue> {
-    let parts: Vec<&str> = key.split('_').collect();
-    if parts.len() != 4 || parts[0] != "grib2" {
-        return Err(JsValue::from_str(
-            "Invalid key format. Expected 'grib2_<disc>_<cat>_<param>'",
-        ));
-    }
+    let (discipline, category, parameter) = grib_parameter_from_key(parameter_key)?;
+    let (surface1, surface2) = fixed_surfaces_from_key(surface_key)?;
 
-    let discipline: u8 = parts[1]
-        .parse()
-        .map_err(|_| JsValue::from_str("Invalid discipline in key"))?;
-    let category: u8 = parts[2]
-        .parse()
-        .map_err(|_| JsValue::from_str("Invalid category in key"))?;
-    let parameter: u8 = parts[3]
-        .parse()
-        .map_err(|_| JsValue::from_str("Invalid parameter in key"))?;
-
-    let (index, subindex) = find_grib_index(bytes, discipline, category, parameter, time)
-        .map_err(|e| JsValue::from(e))?;
+    let (index, subindex) = find_grib_index(
+        bytes, discipline, category, parameter, &surface1, &surface2, time,
+    )
+    .map_err(|e| JsValue::from(e))?;
     let (lat, lon, values) = get_lat_lon_and_values(bytes, (index, subindex))?;
 
     let nearest_point_index = find_closest_point_in_grid(&lat, &lon, query_lat, query_lon);
@@ -242,10 +231,18 @@ pub fn query_grib_message_at_point(
 }
 
 #[wasm_bindgen]
-pub fn get_scalar_field(bytes: &[u8], key: &str, time: i64) -> Result<JsValue, JsValue> {
-    let (discipline, category, parameter) = grib_parameter_from_key(key)?;
+pub fn get_scalar_field(
+    bytes: &[u8],
+    parameter_key: &str,
+    surface_key: &str,
+    time: i64,
+) -> Result<JsValue, JsValue> {
+    let (discipline, category, parameter) = grib_parameter_from_key(parameter_key)?;
+    let (surface1, surface2) = fixed_surfaces_from_key(surface_key)?;
 
-    let (index, subindex) = find_grib_index(bytes, discipline, category, parameter, time)?;
+    let (index, subindex) = find_grib_index(
+        bytes, discipline, category, parameter, &surface1, &surface2, time,
+    )?;
     let (lat, lon, values) = get_lat_lon_and_values(bytes, (index, subindex))?;
     // Convert Rust Vec<f32> to JS Float32Array
     let lat = Float32Array::from(lat.as_slice());
@@ -265,8 +262,9 @@ pub fn get_scalar_field(bytes: &[u8], key: &str, time: i64) -> Result<JsValue, J
 #[wasm_bindgen]
 pub fn vector_field_overlay(
     bytes: &[u8],
-    key_u: &str,
-    key_v: &str,
+    param_key_u: &str,
+    param_key_v: &str,
+    surface_key: &str,
     time: i64,
     zoom_level: i64,
     settings: JsValue,
@@ -274,10 +272,16 @@ pub fn vector_field_overlay(
     let settings = serde_wasm_bindgen::from_value(settings)
         .map_err(|e| GribViewerError::Other(format!("Error deserializing settings: {}", e)))?;
 
-    let param_u = grib_parameter_from_key(key_u)?;
-    let index_u = find_grib_index(bytes, param_u.0, param_u.1, param_u.2, time)?;
-    let param_v = grib_parameter_from_key(key_v)?;
-    let index_v = find_grib_index(bytes, param_v.0, param_v.1, param_v.2, time)?;
+    let (surface1, surface2) = fixed_surfaces_from_key(surface_key)?;
+
+    let param_u = grib_parameter_from_key(param_key_u)?;
+    let index_u = find_grib_index(
+        bytes, param_u.0, param_u.1, param_u.2, &surface1, &surface2, time,
+    )?;
+    let param_v = grib_parameter_from_key(param_key_v)?;
+    let index_v = find_grib_index(
+        bytes, param_v.0, param_v.1, param_v.2, &surface1, &surface2, time,
+    )?;
 
     // it is assumed that u and v have the same grid
     // // TODO: should this be checked?
@@ -292,15 +296,18 @@ pub fn vector_field_overlay(
 #[wasm_bindgen]
 pub fn heatmap_overlay(
     bytes: &[u8],
-    key: &str,
+    param_key: &str,
+    surface_key: &str,
     time: i64,
     settings: JsValue,
 ) -> Result<JsValue, JsValue> {
     let settings = serde_wasm_bindgen::from_value(settings)
         .map_err(|e| GribViewerError::Other(format!("Error deserializing settings: {}", e)))?;
 
-    let param = grib_parameter_from_key(key)?;
-    let index = find_grib_index(bytes, param.0, param.1, param.2, time)?;
+    let (surface1, surface2) = fixed_surfaces_from_key(surface_key)?;
+
+    let param = grib_parameter_from_key(param_key)?;
+    let index = find_grib_index(bytes, param.0, param.1, param.2, &surface1, &surface2, time)?;
 
     let (grid, values) = get_grid_and_values(bytes, index)?;
 
@@ -312,18 +319,25 @@ pub fn heatmap_overlay(
 #[wasm_bindgen]
 pub fn magnitude_heatmap_overlay(
     bytes: &[u8],
-    key_u: &str,
-    key_v: &str,
+    param_key_u: &str,
+    param_key_v: &str,
+    surface_key: &str,
     time: i64,
     heatmap_overlay_settings: JsValue,
 ) -> Result<JsValue, JsValue> {
     let heatmap_overlay_settings = serde_wasm_bindgen::from_value(heatmap_overlay_settings)
         .map_err(|e| GribViewerError::Other(format!("Error deserializing settings: {}", e)))?;
 
-    let param_u = grib_parameter_from_key(key_u)?;
-    let index_u = find_grib_index(bytes, param_u.0, param_u.1, param_u.2, time)?;
-    let param_v = grib_parameter_from_key(key_v)?;
-    let index_v = find_grib_index(bytes, param_v.0, param_v.1, param_v.2, time)?;
+    let (surface1, surface2) = fixed_surfaces_from_key(surface_key)?;
+
+    let param_u = grib_parameter_from_key(param_key_u)?;
+    let index_u = find_grib_index(
+        bytes, param_u.0, param_u.1, param_u.2, &surface1, &surface2, time,
+    )?;
+    let param_v = grib_parameter_from_key(param_key_v)?;
+    let index_v = find_grib_index(
+        bytes, param_v.0, param_v.1, param_v.2, &surface1, &surface2, time,
+    )?;
 
     // it is assumed that u and v have the same grid
     // TODO: should this be checked?

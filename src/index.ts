@@ -30,7 +30,6 @@ let map: L.Map | null = null;
 let gribOverlayManager: GribOverlayManager | null = null;
 let selectedTime: bigint = 0n;
 let settings: OverlaySettingsManager | null = null;
-let vectorFieldFixedSurfaces: { [key: GribKey]: string[] };
 
 async function updateParameterSelect(file: File) {
   const arrayBuffer = await file.arrayBuffer();
@@ -141,6 +140,7 @@ function updateVectorFieldSurfaceSelect() {
 
   if (selectedVFParameter === "None") {
     vectorFieldSurfaceSelect.disabled = true;
+    updateDisplayedParameters();
     return;
   }
 
@@ -201,6 +201,7 @@ function updateHeatmapSurfaceSelect() {
     selectedHMParameter === "magnitudeVectorField"
   ) {
     heatmapSurfaceSelect.disabled = true;
+    updateDisplayedParameters();
     return;
   }
 
@@ -277,7 +278,7 @@ function updateTimeSelect() {
     availableTimes = get_available_timestamps(
       gribOverlayManager.gribBytes,
       selectedParameter.firstComponent,
-      selectedHMParameter,
+      selectedHMSurface,
     );
   }
 
@@ -304,8 +305,8 @@ function updateTimeSelect() {
       availableTimes.map((t) => BigInt(t)),
     );
     timestampSelect.value = String(selectedTime);
-    updateDisplayedParameters();
   }
+  updateDisplayedParameters();
 }
 
 // function displayCanvas(canvas) {
@@ -342,12 +343,12 @@ function updateDisplayedParameters() {
   const vectorFieldSurfaceSelect = document.getElementById(
     "vectorFieldSurfaceSelect",
   ) as HTMLSelectElement;
-  const selectedVFSurface = vectorFieldSurfaceSelect.value ?? null;
+  const selectedVFSurface = vectorFieldSurfaceSelect.value;
 
   const heatmapSurfaceSelect = document.getElementById(
     "heatmapSurfaceSelect",
   ) as HTMLSelectElement;
-  const selectedHMSurface = heatmapSurfaceSelect.value ?? null;
+  const selectedHMSurface = heatmapSurfaceSelect.value;
 
   if (
     selectedHeatMapParameter != "None" &&
@@ -355,14 +356,22 @@ function updateDisplayedParameters() {
   ) {
     // display parameter as heatmap
     const heatmapKey = new GribKey(selectedHeatMapParameter);
-    gribOverlayManager?.displayHeatmap(heatmapKey, selectedTime);
+    gribOverlayManager?.displayHeatmap(
+      heatmapKey,
+      selectedHMSurface,
+      selectedTime,
+    );
   } else if (
     selectedHeatMapParameter == "magnitudeVectorField" &&
     selectedVectorFieldParameter != "None"
   ) {
     // display magnitude of vectorfield as heatmap
     const vectorKey = new GribKey(selectedVectorFieldParameter);
-    gribOverlayManager?.displayHeatmap(vectorKey, selectedTime);
+    gribOverlayManager?.displayHeatmap(
+      vectorKey,
+      selectedVFSurface,
+      selectedTime,
+    );
   } else if (selectedHeatMapParameter == "None") {
     // display no heatmap
     gribOverlayManager?.clearHeatMap();
@@ -370,7 +379,11 @@ function updateDisplayedParameters() {
 
   if (selectedVectorFieldParameter != "None") {
     const vectorKey = new GribKey(selectedVectorFieldParameter);
-    gribOverlayManager?.displayVectorField(vectorKey, selectedTime);
+    gribOverlayManager?.displayVectorField(
+      vectorKey,
+      selectedVFSurface,
+      selectedTime,
+    );
   } else {
     gribOverlayManager?.clearVectorField();
   }
@@ -401,7 +414,17 @@ function popupClosestGridPoint(lat: number, lon: number) {
   const selectedVectorFieldParameter = vectorFieldSelect.value;
   const selectedHeatMapParameter = heatmapSelect.value;
 
-  let lat_out, lon_out;
+  const vectorFieldSurfaceSelect = document.getElementById(
+    "vectorFieldSurfaceSelect",
+  ) as HTMLSelectElement;
+  const selectedVFSurface = vectorFieldSurfaceSelect.value;
+
+  const heatmapSurfaceSelect = document.getElementById(
+    "heatmapSurfaceSelect",
+  ) as HTMLSelectElement;
+  const selectedHMSurface = heatmapSurfaceSelect.value;
+
+  let lat_out: number, lon_out: number;
 
   if (
     !gribOverlayManager ||
@@ -420,32 +443,32 @@ function popupClosestGridPoint(lat: number, lon: number) {
       .split(",");
     const parameterName =
       vectorFieldSelect.options[vectorFieldSelect.selectedIndex].textContent;
-    if (u_key && v_key) {
-      const u_data = query_grib_message_at_point(
-        gribOverlayManager.gribBytes,
-        u_key,
-        BigInt(selectedTime),
-        lat,
-        lon,
-      );
-      const v_data = query_grib_message_at_point(
-        gribOverlayManager.gribBytes,
-        v_key,
-        BigInt(selectedTime),
-        lat,
-        lon,
-      );
+    const u_data = query_grib_message_at_point(
+      gribOverlayManager.gribBytes,
+      u_key,
+      selectedVFSurface,
+      BigInt(selectedTime),
+      lat,
+      lon,
+    );
+    const v_data = query_grib_message_at_point(
+      gribOverlayManager.gribBytes,
+      v_key,
+      selectedVFSurface,
+      BigInt(selectedTime),
+      lat,
+      lon,
+    );
 
-      popupContent +=
-        `${parameterName}:<br>` +
-        `&emsp;U: ${u_data.value.toFixed(2)}<br>` +
-        `&emsp;V: ${v_data.value.toFixed(2)}<br>` +
-        `&emsp;Speed: ${Math.sqrt(u_data.value ** 2 + v_data.value ** 2).toFixed(2)}<br>` +
-        `&emsp;Direction: ${(90 - (Math.atan2(v_data.value, u_data.value) * 180) / Math.PI).toFixed(2)}°<br>`;
-      // TODO: should wind direction be inverted?
-      lat_out = u_data.lat;
-      lon_out = u_data.lon;
-    }
+    popupContent +=
+      `${parameterName}:<br>` +
+      `&emsp;U: ${u_data.value.toFixed(2)}<br>` +
+      `&emsp;V: ${v_data.value.toFixed(2)}<br>` +
+      `&emsp;Speed: ${Math.sqrt(u_data.value ** 2 + v_data.value ** 2).toFixed(2)}<br>` +
+      `&emsp;Direction: ${(90 - (Math.atan2(v_data.value, u_data.value) * 180) / Math.PI).toFixed(2)}°<br>`;
+    // TODO: should wind direction be inverted?
+    lat_out = u_data.lat;
+    lon_out = u_data.lon;
   }
 
   // add data on selected heat map to popupContent
@@ -456,6 +479,7 @@ function popupClosestGridPoint(lat: number, lon: number) {
     const data = query_grib_message_at_point(
       gribOverlayManager.gribBytes,
       selectedHeatMapParameter,
+      selectedHMSurface,
       BigInt(selectedTime),
       lat,
       lon,
@@ -468,6 +492,9 @@ function popupClosestGridPoint(lat: number, lon: number) {
     lat_out = data.lat;
     lon_out = data.lon;
   }
+
+  lat_out ??= lat;
+  lon_out ??= lon;
 
   popupContent =
     "Closest grid point:<br>" +
@@ -526,27 +553,16 @@ init().then(() => {
     "vectorFieldParameterSelect",
   ) as HTMLSelectElement;
 
-  heatmapSelect.addEventListener("change", () => {
-    const selectedHMParameter = heatmapSelect.value;
-    const selectedVFParameter = vectorFieldSelect.value;
+  const vectorFieldSurfaceSelect = document.getElementById(
+    "vectorFieldSurfaceSelect",
+  ) as HTMLSelectElement;
 
-    if (
-      selectedVFParameter === "None" &&
-      selectedHMParameter !== "magnitudeVectorField" &&
-      selectedHMParameter !== "None"
-    ) {
-      updateTimeSelect(new GribKey(selectedHMParameter));
-    } else if (selectedVFParameter !== "None") {
-      updateDisplayedParameters();
-    } else if (
-      selectedVFParameter === "None" &&
-      selectedHMParameter === "None"
-    ) {
-      if (gribOverlayManager) {
-        gribOverlayManager.clearHeatMap();
-        gribOverlayManager.clearVectorField();
-      }
-    }
+  const heatmapSurfaceSelect = document.getElementById(
+    "heatmapSurfaceSelect",
+  ) as HTMLSelectElement;
+
+  heatmapSelect.addEventListener("change", () => {
+    updateHeatmapSurfaceSelect();
   });
 
   vectorFieldSelect.addEventListener("change", () => {
@@ -564,21 +580,18 @@ init().then(() => {
 
     if (!vfSelected && selectedHM === "magnitudeVectorField") {
       heatmapSelect.value = "None";
-      selectedHM = "None";
+      updateHeatmapSurfaceSelect();
     }
 
-    if (!vfSelected && selectedHM === "None") {
-      if (gribOverlayManager) {
-        gribOverlayManager.clearHeatMap();
-        gribOverlayManager.clearVectorField();
-      }
-      return;
-    }
+    updateVectorFieldSurfaceSelect();
+  });
 
-    // Show time selector based on current active parameter
-    updateTimeSelect(
-      vfSelected ? new GribKey(selectedVF) : new GribKey(selectedHM),
-    );
+  vectorFieldSurfaceSelect.addEventListener("change", () => {
+    updateTimeSelect();
+  });
+
+  heatmapSurfaceSelect.addEventListener("change", () => {
+    updateTimeSelect();
   });
 
   // ===== time related fields event listeners =====
