@@ -23,7 +23,7 @@ class ColorbarControl extends L.Control {
     // this.options = options;
   }
 
-  onAdd(map: L.Map): HTMLElement {
+  onAdd(_map: L.Map): HTMLElement {
     let div = L.DomUtil.create("div", "colorbar-control") as HTMLDivElement;
 
     // div.innerHTML = "TESTTEST";
@@ -62,7 +62,7 @@ class ColorbarControl extends L.Control {
     return div;
   }
 
-  onRemove(map: L.Map): void {}
+  onRemove(_map: L.Map): void {}
 }
 
 function createColorBar(
