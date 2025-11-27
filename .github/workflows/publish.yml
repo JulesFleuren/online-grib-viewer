@@ -47,6 +47,13 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('rust-wasm/Cargo.lock') }}
 
       # ------------------------------
+      # Rust tests
+      # ------------------------------
+      - name: Run Rust tests
+        working-directory: rust-wasm
+        run: cargo test --workspace --release
+
+      # ------------------------------
       # Build Rust → Wasm
       # outputs to /pkg/
       # ------------------------------
@@ -66,6 +73,10 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      # TypeScript checking
+      - name: TypeScript type check
+        run: npx tsc --noEmit
 
       - name: Build frontend with Vite
         run: npm run build

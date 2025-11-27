@@ -17,7 +17,6 @@ import {
   loadDefaultSettings,
   OverlaySettingsManager,
 } from "./overlaySettings.js";
-import { createColorBar } from "./colorbarControl.js";
 
 // certain parameter pairs are known to be vector fields
 const PARAMETER_PAIRS = {
@@ -346,6 +345,7 @@ init().then(() => {
 
   const URL = "https://api.protomaps.com/tiles/v4/{z}/{x}/{y}.mvt";
   const layer = leafletLayer({
+    // @ts-expect-error: some weird error about env not being a recognised property
     url: URL + `?key=${import.meta.env.VITE_PROTOMAPS_API_KEY}`,
     flavor: "light",
     lang: "en",
