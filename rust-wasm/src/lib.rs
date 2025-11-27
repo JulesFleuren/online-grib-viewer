@@ -1,4 +1,6 @@
 use console_error_panic_hook;
+use grib::FixedSurface;
+use grib::codetables::CodeTable4_5;
 use grib::codetables::{CodeTable4_2, Lookup};
 use js_sys::Float32Array;
 use log::warn;
@@ -75,13 +77,97 @@ pub fn get_available_parameters(bytes: &[u8]) -> Result<Vec<JsValue>, JsValue> {
 }
 
 #[wasm_bindgen]
-pub fn get_available_timestamps(bytes: &[u8], key: &str) -> Result<Vec<JsValue>, JsValue> {
+pub fn get_available_surfaces(bytes: &[u8], key: &str) -> Result<Vec<JsValue>, JsValue> {
     let grib2 = grib::from_bytes(bytes).map_err(|e| GribViewerError::from(e))?;
 
-    let mut times: HashSet<i64> = HashSet::new();
+    let mut surfaces: HashMap<String, String> = HashMap::new();
     let (discipline, category, parameter) = grib_parameter_from_key(key)?;
 
     for (index, message) in iter_messages_of_parameter(&grib2, discipline, category, parameter) {
+        if let Some(surfaces_info) = &message.prod_def().fixed_surfaces() {
+            let (surface1, surface2) = surfaces_info;
+            let surface_key = format!(
+                "surface_{}_{}_{}_{}_{}_{}",
+                surface1.surface_type,
+                surface1.scale_factor,
+                surface1.scaled_value,
+                surface2.surface_type,
+                surface2.scale_factor,
+                surface2.scaled_value
+            );
+            surfaces
+                .entry(surface_key)
+                .or_insert(format_surfaces(surface1, surface2));
+        } else {
+            warn!(
+                "Message with unsupported tamplate definition number, skipping message {:?}",
+                index
+            );
+            continue;
+        }
+    }
+
+    let mut js_surfaces: Vec<JsValue> = Vec::new();
+
+    // iterate over items sorted by key
+    let mut surface_keys: Vec<_> = surfaces.keys().collect();
+    surface_keys.sort(); // requires K: Ord
+
+    for surface_key in surface_keys {
+        let surface = js_sys::Object::new();
+        js_sys::Reflect::set(
+            &surface,
+            &JsValue::from_str("key"),
+            &JsValue::from(surface_key),
+        )
+        .expect("failed to set name");
+        js_sys::Reflect::set(
+            &surface,
+            &JsValue::from_str("description"),
+            &JsValue::from(surfaces[surface_key].to_string()),
+        )
+        .expect("failed to set key");
+        js_surfaces.push(JsValue::from(surface));
+    }
+    Ok(js_surfaces)
+}
+
+fn format_surfaces(surface1: &FixedSurface, surface2: &FixedSurface) -> String {
+    let type1 = CodeTable4_5
+        .lookup(usize::from(surface1.surface_type))
+        .to_string();
+    let value1 = surface1.value();
+    let unit1 = surface1.unit().unwrap_or("");
+
+    let surface1_string = format!("{}: {}{}", type1, value1, unit1);
+    if surface2.surface_type == 255 {
+        // surface 2 is missing: only format surface 1 to string
+        return surface1_string;
+    } else {
+        let type2 = CodeTable4_5
+            .lookup(usize::from(surface2.surface_type))
+            .to_string();
+        let value2 = surface2.value();
+        let unit2 = surface2.unit().unwrap_or("");
+        return format!("{} - {}: {}{}", surface1_string, type2, value2, unit2);
+    }
+}
+
+#[wasm_bindgen]
+pub fn get_available_timestamps(
+    bytes: &[u8],
+    parameter_key: &str,
+    surface_key: &str,
+) -> Result<Vec<JsValue>, JsValue> {
+    let grib2 = grib::from_bytes(bytes).map_err(|e| GribViewerError::from(e))?;
+
+    let mut times: HashSet<i64> = HashSet::new();
+    let (discipline, category, parameter) = grib_parameter_from_key(parameter_key)?;
+    let (surface1, surface2) = fixed_surfaces_from_key(surface_key)?;
+
+    for (index, message) in iter_messages_of_parameter_and_surface(
+        &grib2, discipline, category, parameter, surface1, surface2,
+    ) {
         let temporal_info = grib::TemporalInfo::from(&message.temporal_raw_info());
         if let Some(forecast_time) = temporal_info.forecast_time_target {
             times.insert(forecast_time.timestamp());
