@@ -1,4 +1,4 @@
-use grib::{Grib2, GridDefinitionTemplateValues, MessageIndex, SubMessage};
+use grib::{FixedSurface, Grib2, GridDefinitionTemplateValues, MessageIndex, SubMessage};
 use log::warn;
 use std::io::Read;
 
@@ -36,6 +36,55 @@ pub(crate) fn iter_messages_of_parameter<'a, R: Read>(
 
         // If all three are matched, let the iterator return this message
         d == discipline && c == category && p == parameter
+    })
+}
+
+pub(crate) fn iter_messages_of_parameter_and_surface<'a, R: Read>(
+    grib: &'a Grib2<R>,
+    discipline: u8,
+    category: u8,
+    parameter: u8,
+    surface1: FixedSurface,
+    surface2: FixedSurface,
+) -> impl Iterator<Item = (MessageIndex, SubMessage<'a, R>)> + 'a {
+    grib.iter().filter(move |(index, message)| {
+        let d = message.indicator().discipline;
+
+        let prod_def = message.prod_def();
+
+        let Some(c) = prod_def.parameter_category() else {
+            warn!(
+                "Unsupported product definition template number: {}, skipping message {:?}",
+                prod_def.prod_tmpl_num(),
+                index
+            );
+            return false;
+        };
+
+        let Some(p) = prod_def.parameter_number() else {
+            warn!(
+                "Unsupported product definition template number: {}, skipping message {:?}",
+                prod_def.prod_tmpl_num(),
+                index
+            );
+            return false;
+        };
+
+        // If all three are matched, let the iterator return this message
+        if let Some((s1, s2)) = prod_def.fixed_surfaces() {
+            return d == discipline
+                && c == category
+                && p == parameter
+                && s1 == surface1
+                && s2 == surface2;
+        } else {
+            warn!(
+                "Unsupported product definition template number: {}, skipping message {:?}",
+                prod_def.prod_tmpl_num(),
+                index
+            );
+            return false;
+        }
     })
 }
 
@@ -131,11 +180,55 @@ pub(crate) fn grib_parameter_from_key(key: &str) -> Result<(u8, u8, u8), GribVie
     Ok((discipline, category, parameter))
 }
 
+pub(crate) fn fixed_surfaces_from_key(
+    key: &str,
+) -> Result<(FixedSurface, FixedSurface), GribViewerError> {
+    let parts: Vec<&str> = key.split('_').collect();
+    if parts.len() != 7 || parts[0] != "surface" {
+        return Err(GribViewerError::InvalidKey(
+            "invalid key format, expected 'surface_<t1>_<f1>_<v1>_<t2>_<f2>_<v2>'".to_string(),
+        ));
+    }
+    let surface_type1: u8 = parts[1]
+        .parse()
+        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse surface_type: {}", e)))?;
+    let scale_factor1: i8 = parts[2]
+        .parse()
+        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse scale_factor: {}", e)))?;
+    let scaled_value1: i32 = parts[3]
+        .parse()
+        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse scaled_value: {}", e)))?;
+    let surface_type2: u8 = parts[4]
+        .parse()
+        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse surface_type: {}", e)))?;
+    let scale_factor2: i8 = parts[5]
+        .parse()
+        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse scale_factor: {}", e)))?;
+    let scaled_value2: i32 = parts[6]
+        .parse()
+        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse scaled_value: {}", e)))?;
+
+    Ok((
+        FixedSurface {
+            surface_type: surface_type1,
+            scale_factor: scale_factor1,
+            scaled_value: scaled_value1,
+        },
+        FixedSurface {
+            surface_type: surface_type2,
+            scale_factor: scale_factor2,
+            scaled_value: scaled_value2,
+        },
+    ))
+}
+
 pub(crate) fn find_grib_index(
     bytes: &[u8],
     discipline: u8,
     category: u8,
     parameter: u8,
+    surface1: &FixedSurface,
+    surface2: &FixedSurface,
     time: i64,
 ) -> Result<(usize, usize), GribViewerError> {
     let grib2 = grib::from_bytes(bytes)?;
@@ -162,7 +255,21 @@ pub(crate) fn find_grib_index(
             continue;
         };
 
-        if d == discipline && c == category && p == parameter && t.timestamp() == time {
+        let Some((s1, s2)) = prod_def.fixed_surfaces() else {
+            warn!(
+                "Unsupported product definition template number: {}, skipping message {:?}",
+                prod_def.prod_tmpl_num(),
+                index
+            );
+            continue;
+        };
+        if d == discipline
+            && c == category
+            && p == parameter
+            && t.timestamp() == time
+            && s1 == *surface1
+            && s2 == *surface2
+        {
             return Ok((index, subindex));
         }
     }
