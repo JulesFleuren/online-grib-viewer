@@ -261,10 +261,10 @@ async function loadDefaultSettings(
   gribBytes: Uint8Array,
 ): Promise<OverlaySettingsManager> {
   try {
-    const response = await fetch("/settings.json");
+    const response = await fetch("/settings/overlaySettings.json");
     if (!response.ok) {
       throw new Error(
-        `HTTP error fetching settings.json, status: ${response.status}`,
+        `HTTP error fetching overlaySettings.json, status: ${response.status}`,
       );
     }
     return new OverlaySettingsManager(await response.json(), gribBytes);
