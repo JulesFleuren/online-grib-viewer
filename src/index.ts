@@ -77,8 +77,8 @@ async function updateParameterSelect(file: File) {
     vectorFieldSelect.appendChild(emptyOption);
   }
   // Check if any parameter pairs are available for vector field display and add an option if so
-  Object.keys(vectorPairs).forEach((pairName) => {
-    const pair = vectorPairs[pairName as keyof typeof vectorPairs];
+  Object.keys(vectorPairs ?? {}).forEach((pairName) => {
+    const pair = vectorPairs![pairName as keyof typeof vectorPairs];
     const hasU = parameters.some((p) => p.key === pair.u);
     const hasV = parameters.some((p) => p.key === pair.v);
     if (hasU && hasV) {
