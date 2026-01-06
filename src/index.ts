@@ -30,7 +30,7 @@ let gribOverlayManager: GribOverlayManager | null = null;
 let selectedTime: bigint = 0n;
 let settings: OverlaySettingsManager | null = null;
 
-async function updateParameterSelect(file: File) {
+async function loadFile(file: File) {
   const arrayBuffer = await file.arrayBuffer();
   const gribBytes = new Uint8Array(arrayBuffer);
 
@@ -88,7 +88,7 @@ async function updateParameterSelect(file: File) {
   option.value = "magnitudeVectorField";
   option.id = "magnitudeVectorFieldOption";
   option.textContent = "Magnitude of Vector Field";
-  if (vectorFieldSelect.options.length == 0) {
+  if (vectorFieldSelect.options.length == 1) {
     option.disabled = true;
   }
   heatmapSelect.appendChild(option);
@@ -544,7 +544,7 @@ init().then(() => {
     const file = fileInput.files?.[0];
     if (!file) return;
 
-    await updateParameterSelect(file);
+    await loadFile(file);
     if (map && gribOverlayManager && gribOverlayManager.overlayBounds) {
       map.fitBounds(gribOverlayManager.overlayBounds);
     }
