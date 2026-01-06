@@ -1,6 +1,6 @@
 import type { Map, LatLngBoundsExpression } from "leaflet";
 import L, { LatLngBounds } from "leaflet";
-import type { GribKey } from "./gribKey.js";
+import { GribKey } from "./gribKey.js";
 import { OverlaySettingsManager } from "./overlaySettings.js";
 import {
   vector_field_overlay,
@@ -9,13 +9,27 @@ import {
 } from "../pkg/online_grib_viewer.js";
 import { createColorBar, ColorbarControl } from "./colorbarControl.js";
 
+interface HeatMapLayer {
+  overlay: L.ImageOverlay;
+  parameterKey: GribKey;
+  surfaceKey: string;
+  time: bigint;
+}
+
+interface VectorFieldLayer {
+  overlay: L.ImageOverlay;
+  parameterKey: GribKey;
+  surfaceKey: string;
+  time: bigint;
+}
+
 class GribOverlay {
   gribBytes: Uint8Array;
   map: Map;
   overlaySettingsManager: OverlaySettingsManager;
-  heatmapLayer: L.ImageOverlay | null;
-  vectorFieldLayer: L.ImageOverlay | null;
-  vectorFieldZoomLayers: { [zoomLevel: number]: any } | null;
+  heatmapLayer: HeatMapLayer | null;
+  vectorFieldLayer: VectorFieldLayer | null;
+  vectorFieldZoomOverlays: { [zoomLevel: number]: any } | null;
   displayedZoomLevel: number;
   overlayBounds: LatLngBoundsExpression | null;
   colorbarControl: ColorbarControl | null;
@@ -30,7 +44,7 @@ class GribOverlay {
     this.overlaySettingsManager = overlaySettingsManger;
     this.heatmapLayer = null;
     this.vectorFieldLayer = null;
-    this.vectorFieldZoomLayers = null;
+    this.vectorFieldZoomOverlays = null;
     this.displayedZoomLevel = map.getZoom();
     this.overlayBounds = null;
     this.colorbarControl = null;
@@ -38,7 +52,7 @@ class GribOverlay {
 
   clearHeatMap() {
     if (this.heatmapLayer) {
-      this.map.removeLayer(this.heatmapLayer);
+      this.map.removeLayer(this.heatmapLayer.overlay);
       this.heatmapLayer = null;
     }
     if (this.colorbarControl) {
@@ -48,17 +62,23 @@ class GribOverlay {
 
   clearVectorField() {
     if (this.vectorFieldLayer) {
-      this.map.removeLayer(this.vectorFieldLayer);
+      this.map.removeLayer(this.vectorFieldLayer.overlay);
       this.vectorFieldLayer = null;
     }
   }
 
-  displayVectorField(
-    parameter_key: GribKey,
-    surface_key: string,
-    time: bigint,
-  ) {
-    if (!parameter_key.isVectorField) {
+  displayVectorField(parameterKey: GribKey, surfaceKey: string, time: bigint) {
+    if (
+      // if nothing changed, return
+      this.vectorFieldLayer &&
+      parameterKey === this.vectorFieldLayer.parameterKey &&
+      surfaceKey === this.vectorFieldLayer.surfaceKey &&
+      time === this.vectorFieldLayer.time
+    ) {
+      return;
+    }
+
+    if (!parameterKey.isVectorField) {
       throw new Error(
         "Only vector fields can be displayed as vector field overlay",
       );
@@ -67,15 +87,15 @@ class GribOverlay {
     this.clearVectorField();
 
     const vectorFieldSettings =
-      this.overlaySettingsManager.getVectorFieldSettings(parameter_key);
+      this.overlaySettingsManager.getVectorFieldSettings(parameterKey);
 
     // generate wind barb overlay
     let zoomLevel = this.map.getZoom();
     let svgOverlay = vector_field_overlay(
       this.gribBytes,
-      parameter_key.firstComponent,
-      parameter_key.secondComponent!,
-      surface_key,
+      parameterKey.firstComponent,
+      parameterKey.secondComponent!,
+      surfaceKey,
       time,
       BigInt(zoomLevel),
       vectorFieldSettings,
@@ -98,9 +118,9 @@ class GribOverlay {
       zoomLevel = minZoomLevel;
       svgOverlay = vector_field_overlay(
         this.gribBytes,
-        parameter_key.firstComponent,
-        parameter_key.secondComponent!,
-        surface_key,
+        parameterKey.firstComponent,
+        parameterKey.secondComponent!,
+        surfaceKey,
         time,
         BigInt(zoomLevel),
         vectorFieldSettings,
@@ -116,15 +136,22 @@ class GribOverlay {
     });
     const vecFieldUrl = URL.createObjectURL(svgBlob);
 
-    this.vectorFieldLayer = L.imageOverlay(vecFieldUrl, this.overlayBounds, {
+    const overlay = L.imageOverlay(vecFieldUrl, this.overlayBounds, {
       opacity: 1.0,
     }).addTo(this.map);
+
+    this.vectorFieldLayer = {
+      overlay: overlay,
+      parameterKey: parameterKey,
+      surfaceKey: surfaceKey,
+      time: time,
+    };
 
     this.displayedZoomLevel = zoomLevel;
 
     // build a cache of layers at different zoom levels
-    this.vectorFieldZoomLayers = {};
-    this.vectorFieldZoomLayers[zoomLevel] = svgOverlay;
+    this.vectorFieldZoomOverlays = {};
+    this.vectorFieldZoomOverlays[zoomLevel] = svgOverlay;
 
     for (let zl = minZoomLevel; zl <= maxZoomLevel; zl++) {
       if (zl == zoomLevel) {
@@ -132,14 +159,14 @@ class GribOverlay {
       }
       const svgOverlay = vector_field_overlay(
         this.gribBytes,
-        parameter_key.firstComponent,
-        parameter_key.secondComponent!,
-        surface_key,
+        parameterKey.firstComponent,
+        parameterKey.secondComponent!,
+        surfaceKey,
         BigInt(time),
         BigInt(zl),
         vectorFieldSettings,
       );
-      this.vectorFieldZoomLayers[zl] = svgOverlay;
+      this.vectorFieldZoomOverlays[zl] = svgOverlay;
     }
 
     // const data = get_scalar_field(gribBytes, u_key, BigInt(time));
@@ -148,59 +175,75 @@ class GribOverlay {
     // console.log(arrowZoomLayers);
   }
 
-  displayHeatmap(parameter_key: GribKey, surface_key: string, time: bigint) {
+  displayHeatmap(parameterKey: GribKey, surfaceKey: string, time: bigint) {
+    if (
+      // if nothing changed, return
+      this.heatmapLayer &&
+      parameterKey === this.heatmapLayer.parameterKey &&
+      surfaceKey === this.heatmapLayer.surfaceKey &&
+      time === this.heatmapLayer.time
+    ) {
+      return;
+    }
+
     this.clearHeatMap();
-    let imageOverlay;
+    let wasmOverlay;
     // let heatmapSettings;
 
     const heatmapSettings =
-      this.overlaySettingsManager.getHeatmapSettings(parameter_key);
+      this.overlaySettingsManager.getHeatmapSettings(parameterKey);
 
-    if (parameter_key.isVectorField) {
-      const u_key = parameter_key.firstComponent;
-      const v_key = parameter_key.secondComponent!;
+    if (parameterKey.isVectorField) {
+      const u_key = parameterKey.firstComponent;
+      const v_key = parameterKey.secondComponent!;
 
-      imageOverlay = magnitude_heatmap_overlay(
+      wasmOverlay = magnitude_heatmap_overlay(
         this.gribBytes,
         u_key,
         v_key,
-        surface_key,
+        surfaceKey,
         time,
         heatmapSettings,
       );
     } else {
-      imageOverlay = heatmap_overlay(
+      wasmOverlay = heatmap_overlay(
         this.gribBytes,
-        parameter_key.firstComponent,
-        surface_key,
+        parameterKey.firstComponent,
+        surfaceKey,
         time,
         heatmapSettings,
       );
     }
 
     const canvas = document.createElement("canvas");
-    canvas.width = imageOverlay.widthPx;
-    canvas.height = imageOverlay.heightPx;
+    canvas.width = wasmOverlay.widthPx;
+    canvas.height = wasmOverlay.heightPx;
     const ctx = canvas.getContext("2d");
     if (!ctx) {
       throw new Error("Could not get 2D context from canvas");
     }
     const imageData = new ImageData(
-      new Uint8ClampedArray(imageOverlay.image),
-      imageOverlay.widthPx,
-      imageOverlay.heightPx,
+      new Uint8ClampedArray(wasmOverlay.image),
+      wasmOverlay.widthPx,
+      wasmOverlay.heightPx,
     );
     ctx.putImageData(imageData, 0, 0);
     const url = canvas.toDataURL();
 
     const bounds = new LatLngBounds([
-      [imageOverlay.minLat, imageOverlay.minLon],
-      [imageOverlay.maxLat, imageOverlay.maxLon],
+      [wasmOverlay.minLat, wasmOverlay.minLon],
+      [wasmOverlay.maxLat, wasmOverlay.maxLon],
     ]);
 
-    this.heatmapLayer = L.imageOverlay(url, bounds, { opacity: 0.4 }).addTo(
-      this.map,
-    );
+    let overlay = L.imageOverlay(url, bounds, { opacity: 0.4 }).addTo(this.map);
+
+    this.heatmapLayer = {
+      overlay: overlay,
+      parameterKey: parameterKey,
+      surfaceKey: surfaceKey,
+      time: time,
+    };
+
     this.overlayBounds = bounds;
     // this.map.fitBounds(bounds);
 
@@ -212,7 +255,7 @@ class GribOverlay {
       throw new Error("Could not get 2D context from canvas");
     }
     const colorbarImageData = new ImageData(
-      new Uint8ClampedArray(imageOverlay.colorbarImage),
+      new Uint8ClampedArray(wasmOverlay.colorbarImage),
       100,
       1,
     );
@@ -220,8 +263,8 @@ class GribOverlay {
     const colorbarUrl = colorbarCanvas.toDataURL();
     this.colorbarControl = createColorBar(
       colorbarUrl,
-      imageOverlay.minValue,
-      imageOverlay.maxValue,
+      wasmOverlay.minValue,
+      wasmOverlay.maxValue,
       {
         position: "bottomleft",
       },
@@ -231,18 +274,19 @@ class GribOverlay {
   updateZoomLevel() {
     // If there are no cached vector field layers, nothing to do
     if (
-      !this.vectorFieldZoomLayers ||
-      Object.keys(this.vectorFieldZoomLayers).length === 0
+      !this.vectorFieldZoomOverlays ||
+      Object.keys(this.vectorFieldZoomOverlays).length === 0 ||
+      !this.vectorFieldLayer
     ) {
       return;
     }
 
     // determine zoom level that we want to load
     const maxZoom = Math.max(
-      ...Object.keys(this.vectorFieldZoomLayers).map((zl) => Number(zl)),
+      ...Object.keys(this.vectorFieldZoomOverlays).map((zl) => Number(zl)),
     );
     const minZoom = Math.min(
-      ...Object.keys(this.vectorFieldZoomLayers).map((zl) => Number(zl)),
+      ...Object.keys(this.vectorFieldZoomOverlays).map((zl) => Number(zl)),
     );
 
     let newZoom = this.map.getZoom();
@@ -265,8 +309,8 @@ class GribOverlay {
     this.clearVectorField();
 
     // Add the appropriate layer for the current zoom level
-    if (this.vectorFieldZoomLayers[newZoom]) {
-      const svgOverlay = this.vectorFieldZoomLayers[newZoom];
+    if (this.vectorFieldZoomOverlays[newZoom]) {
+      const svgOverlay = this.vectorFieldZoomOverlays[newZoom];
       const svgBlob = new Blob([svgOverlay.svgString], {
         type: "image/svg+xml;charset=utf-8",
       });
@@ -277,7 +321,7 @@ class GribOverlay {
         [svgOverlay.maxLat, svgOverlay.maxLon],
       ]);
 
-      this.vectorFieldLayer = L.imageOverlay(url, bounds, {
+      this.vectorFieldLayer.overlay = L.imageOverlay(url, bounds, {
         opacity: 1.0,
       }).addTo(this.map);
     }

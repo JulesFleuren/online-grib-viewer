@@ -115,10 +115,13 @@ async function updateParameterSelect(file: File) {
       // skip the first because that is the empty option, skip the second, because that is the
       // magnitudeVectorField option, which should be disabled when this else clause is reached
       heatmapSelect.value = heatmapSelect.options[2].value;
+      updateHeatmapSurfaceSelect();
+    } else {
+      // No grib messages found
+      heatmapSelect.value = heatmapSelect.options[0].value;
     }
   }
   updateVectorFieldSurfaceSelect();
-  updateHeatmapSurfaceSelect();
 }
 
 function updateVectorFieldSurfaceSelect() {
@@ -139,7 +142,7 @@ function updateVectorFieldSurfaceSelect() {
 
   if (selectedVFParameter === "None") {
     vectorFieldSurfaceSelect.disabled = true;
-    updateDisplayedParameters();
+    updateTimeSelect();
     return;
   }
 
