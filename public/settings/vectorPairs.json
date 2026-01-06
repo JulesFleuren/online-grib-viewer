@@ -1,0 +1,12 @@
+{
+  "Kinematic Moisture Flux": { "u": "grib2_0_1_91", "v": "grib2_0_1_92" },
+  "Wind": { "u": "grib2_0_2_2", "v": "grib2_0_2_3" },
+  "Wind (gust)": { "u": "grib2_0_2_23", "v": "grib2_0_2_24" },
+  "Storm Motion": { "u": "grib2_0_2_27", "v": "grib2_0_2_28" },
+  "Geostrophic Wind": { "u": "grib2_0_2_41", "v": "grib2_0_2_42" },
+  "Wind Stress": { "u": "grib2_0_2_52", "v": "grib2_0_2_53" },
+  "Neutral Wind": { "u": "grib2_0_2_56", "v": "grib2_0_2_57" },
+  "Surface Stokes Drift": { "u": "grib2_10_0_21", "v": "grib2_10_0_22" },
+  "Current": { "u": "grib2_10_1_2", "v": "grib2_10_1_3" },
+  "Ice Drift": { "u": "grib2_10_2_4", "v": "grib2_10_2_5" }
+}

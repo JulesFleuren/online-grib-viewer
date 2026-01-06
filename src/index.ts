@@ -20,15 +20,27 @@ import {
 } from "./overlaySettings.js";
 
 // certain parameter pairs are known to be vector fields
-const PARAMETER_PAIRS = {
-  Wind: { u: "grib2_0_2_2", v: "grib2_0_2_3" },
-  Current: { u: "grib2_10_1_2", v: "grib2_10_1_3" },
-} as const;
 
 let map: L.Map | null = null;
 let gribOverlayManager: GribOverlayManager | null = null;
 let selectedTime: bigint = 0n;
-let settings: OverlaySettingsManager | null = null;
+let overlaySettings: OverlaySettingsManager | null = null;
+let vectorPairs: { [key: string]: { [key: string]: string } } | null = null;
+
+async function loadPairs() {
+  try {
+    const response = await fetch("/settings/vectorPairs.json");
+    if (!response.ok) {
+      throw new Error(
+        `HTTP error fetching vectorPairs.json, status: ${response.status}`,
+      );
+    }
+    return response.json();
+  } catch (error) {
+    console.error("Error fetching or parsing JSON:", error);
+    throw error;
+  }
+}
 
 async function loadFile(file: File) {
   const arrayBuffer = await file.arrayBuffer();
@@ -39,8 +51,9 @@ async function loadFile(file: File) {
     gribOverlayManager.clearVectorField();
   }
 
-  settings = await loadDefaultSettings(gribBytes);
-  gribOverlayManager = new GribOverlayManager(gribBytes, map!, settings);
+  overlaySettings = await loadDefaultSettings(gribBytes);
+  vectorPairs = await loadPairs();
+  gribOverlayManager = new GribOverlayManager(gribBytes, map!, overlaySettings);
 
   const parameters = get_available_parameters(gribBytes);
 
@@ -64,8 +77,8 @@ async function loadFile(file: File) {
     vectorFieldSelect.appendChild(emptyOption);
   }
   // Check if any parameter pairs are available for vector field display and add an option if so
-  Object.keys(PARAMETER_PAIRS).forEach((pairName) => {
-    const pair = PARAMETER_PAIRS[pairName as keyof typeof PARAMETER_PAIRS];
+  Object.keys(vectorPairs ?? {}).forEach((pairName) => {
+    const pair = vectorPairs![pairName as keyof typeof vectorPairs];
     const hasU = parameters.some((p) => p.key === pair.u);
     const hasV = parameters.some((p) => p.key === pair.v);
     if (hasU && hasV) {
