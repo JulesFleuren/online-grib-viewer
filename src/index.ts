@@ -274,7 +274,7 @@ function updateTimeSelect() {
     );
     // find intersection of timesU and timesV
     availableTimes = timesU.filter((t) => timesV.includes(t));
-  } else {
+  } else if (selectedHMParameter !== "None") {
     var selectedParameter = new GribKey(selectedHMParameter);
     // Scalar field
     availableTimes = get_available_timestamps(
@@ -282,6 +282,8 @@ function updateTimeSelect() {
       selectedParameter.firstComponent,
       selectedHMSurface,
     );
+  } else {
+    availableTimes = [];
   }
 
   // add avaialble times as options to timestampSelect

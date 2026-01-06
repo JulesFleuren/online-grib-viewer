@@ -305,9 +305,6 @@ class GribOverlay {
       }
     }
 
-    // Clear the current vector field layer
-    this.clearVectorField();
-
     // Add the appropriate layer for the current zoom level
     if (this.vectorFieldZoomOverlays[newZoom]) {
       const svgOverlay = this.vectorFieldZoomOverlays[newZoom];
@@ -320,6 +317,9 @@ class GribOverlay {
         [svgOverlay.minLat, svgOverlay.minLon],
         [svgOverlay.maxLat, svgOverlay.maxLon],
       ]);
+
+      // Clear the current vector field layer
+      this.map.removeLayer(this.vectorFieldLayer.overlay);
 
       this.vectorFieldLayer.overlay = L.imageOverlay(url, bounds, {
         opacity: 1.0,
