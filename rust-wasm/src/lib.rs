@@ -3,7 +3,7 @@ use grib::FixedSurface;
 use grib::codetables::CodeTable4_5;
 use grib::codetables::{CodeTable4_2, Lookup};
 use js_sys::Float32Array;
-use log::warn;
+use log::{debug, warn};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::iter::zip;
@@ -106,6 +106,8 @@ pub fn get_available_surfaces(bytes: &[u8], key: &str) -> Result<Vec<JsValue>, J
             continue;
         }
     }
+
+    debug!("{surfaces:?}");
 
     let mut js_surfaces: Vec<JsValue> = Vec::new();
 
