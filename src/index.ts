@@ -30,7 +30,7 @@ let gribOverlayManager: GribOverlayManager | null = null;
 let selectedTime: bigint = 0n;
 let settings: OverlaySettingsManager | null = null;
 
-async function updateParameterSelect(file: File) {
+async function loadFile(file: File) {
   const arrayBuffer = await file.arrayBuffer();
   const gribBytes = new Uint8Array(arrayBuffer);
 
@@ -88,7 +88,7 @@ async function updateParameterSelect(file: File) {
   option.value = "magnitudeVectorField";
   option.id = "magnitudeVectorFieldOption";
   option.textContent = "Magnitude of Vector Field";
-  if (vectorFieldSelect.options.length == 0) {
+  if (vectorFieldSelect.options.length == 1) {
     option.disabled = true;
   }
   heatmapSelect.appendChild(option);
@@ -115,10 +115,13 @@ async function updateParameterSelect(file: File) {
       // skip the first because that is the empty option, skip the second, because that is the
       // magnitudeVectorField option, which should be disabled when this else clause is reached
       heatmapSelect.value = heatmapSelect.options[2].value;
+      updateHeatmapSurfaceSelect();
+    } else {
+      // No grib messages found
+      heatmapSelect.value = heatmapSelect.options[0].value;
     }
   }
   updateVectorFieldSurfaceSelect();
-  updateHeatmapSurfaceSelect();
 }
 
 function updateVectorFieldSurfaceSelect() {
@@ -139,7 +142,7 @@ function updateVectorFieldSurfaceSelect() {
 
   if (selectedVFParameter === "None") {
     vectorFieldSurfaceSelect.disabled = true;
-    updateDisplayedParameters();
+    updateTimeSelect();
     return;
   }
 
@@ -271,7 +274,7 @@ function updateTimeSelect() {
     );
     // find intersection of timesU and timesV
     availableTimes = timesU.filter((t) => timesV.includes(t));
-  } else {
+  } else if (selectedHMParameter !== "None") {
     var selectedParameter = new GribKey(selectedHMParameter);
     // Scalar field
     availableTimes = get_available_timestamps(
@@ -279,6 +282,8 @@ function updateTimeSelect() {
       selectedParameter.firstComponent,
       selectedHMSurface,
     );
+  } else {
+    availableTimes = [];
   }
 
   // add avaialble times as options to timestampSelect
@@ -539,7 +544,7 @@ init().then(() => {
     const file = fileInput.files?.[0];
     if (!file) return;
 
-    await updateParameterSelect(file);
+    await loadFile(file);
     if (map && gribOverlayManager && gribOverlayManager.overlayBounds) {
       map.fitBounds(gribOverlayManager.overlayBounds);
     }
