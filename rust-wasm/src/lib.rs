@@ -1,6 +1,4 @@
 use console_error_panic_hook;
-use grib::FixedSurface;
-use grib::codetables::CodeTable4_5;
 use grib::codetables::{CodeTable4_2, Lookup};
 use js_sys::Float32Array;
 use log::warn;
@@ -130,27 +128,6 @@ pub fn get_available_surfaces(bytes: &[u8], key: &str) -> Result<Vec<JsValue>, J
         js_surfaces.push(JsValue::from(surface));
     }
     Ok(js_surfaces)
-}
-
-fn format_surfaces(surface1: &FixedSurface, surface2: &FixedSurface) -> String {
-    let type1 = CodeTable4_5
-        .lookup(usize::from(surface1.surface_type))
-        .to_string();
-    let value1 = surface1.value();
-    let unit1 = surface1.unit().unwrap_or("");
-
-    let surface1_string = format!("{}: {}{}", type1, value1, unit1);
-    if surface2.surface_type == 255 {
-        // surface 2 is missing: only format surface 1 to string
-        return surface1_string;
-    } else {
-        let type2 = CodeTable4_5
-            .lookup(usize::from(surface2.surface_type))
-            .to_string();
-        let value2 = surface2.value();
-        let unit2 = surface2.unit().unwrap_or("");
-        return format!("{} - {}: {}{}", surface1_string, type2, value2, unit2);
-    }
 }
 
 #[wasm_bindgen]
