@@ -55,6 +55,25 @@
       background: black;
       margin: 0 auto;
     }
+
+    /* ensure that modal is in front of leaflet map*/
+    .modal {
+      z-index: 2000;
+    }
+
+    /* make modal wider */
+    .modal-card {
+      max-width: 900px;  /* or whatever you want */
+      width: 90%;        /* optional, relative to viewport */
+    }
+
+    /* mono spaced font */
+    .custom-mono {
+      font-family: Menlo, Consolas, Monaco, "Courier New", Courier, monospace;
+      font-size: 1rem;         /* optional */
+      white-space: pre-wrap;    /* preserves newlines and tabs */
+    }
+
   </style>
 </head>
 <body>
@@ -70,30 +89,45 @@
         </div>
         <div class="columns" id="parameterField" style="display:none;">
             <div class="column" id="vectorFieldParameterField">
-                <label class="label">Select vector field parameter</label>
-                <div class="control">
-                    <div class="select">
-                    <select id="vectorFieldParameterSelect"></select>
+                <div class="field mt-4">
+                    <label class="label">Select vector field parameter</label>
+                    <div class="control">
+                        <div class="select">
+                        <select id="vectorFieldParameterSelect"></select>
+                        </div>
                     </div>
                 </div>
-                <label class="label">Select vector field surface</label>
-                <div class="control">
-                    <div class="select">
-                    <select id="vectorFieldSurfaceSelect"></select>
+                <div class="field mt-4">
+                    <label class="label">Select vector field surface</label>
+                    <div class="control">
+                        <div class="select">
+                        <select id="vectorFieldSurfaceSelect"></select>
+                        </div>
                     </div>
                 </div>
             </div>
             <div class="column" id="heatmapParameterField">
-                <label class="label">Select heatmap parameter</label>
-                <div class="control">
-                    <div class="select">
-                    <select id="heatmapParameterSelect"></select>
+                <div class="field mt-4">
+                    <label class="label">Select heatmap parameter</label>
+                    <div class="field has-addons">
+                        <div class="control">
+                            <div class="select">
+                            <select id="heatmapParameterSelect"></select>
+                            </div>
+                        </div>
+                        <div class="control">
+                            <button class="button is-link" id="messageInfoButton">
+                            info
+                            </button>
+                        </div>
                     </div>
                 </div>
-                <label class="label">Select heatmap surface</label>
-                <div class="control">
-                    <div class="select">
-                    <select id="heatmapSurfaceSelect"></select>
+                <div class="field mt-4">
+                    <label class="label">Select heatmap surface</label>
+                    <div class="control">
+                        <div class="select">
+                        <select id="heatmapSurfaceSelect"></select>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -124,6 +158,30 @@
       <div id="zoom-level">Zoom Level: </div>
     </div>
   </section>
+
+  <!-- grib message info modal -->
+  <div class="modal" id="messageInfoModal">
+    <div class="modal-background"></div>
+
+    <div class="modal-card">
+      <header class="modal-card-head">
+        <p class="modal-card-title">Grib Message Info</p>
+      </header>
+
+      <section class="modal-card-body">
+        <p id="messageInfoModalBody" class="custom-mono">
+        </p>
+      </section>
+
+      <footer class="modal-card-foot">
+        <button id="messageDumpButton" class="button is-info">Open Dump</button>
+        <span class="ml-auto"></span>
+        <button id="modalCloseButton" class="button is-link">Close</button>
+      </footer>
+    </div>
+  </div>
+
   <script type="module" src="./src/index.ts"></script>
+
 </body>
 </html>

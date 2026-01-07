@@ -1,6 +1,4 @@
 use console_error_panic_hook;
-use grib::FixedSurface;
-use grib::codetables::CodeTable4_5;
 use grib::codetables::{CodeTable4_2, Lookup};
 use js_sys::Float32Array;
 use log::warn;
@@ -130,27 +128,6 @@ pub fn get_available_surfaces(bytes: &[u8], key: &str) -> Result<Vec<JsValue>, J
         js_surfaces.push(JsValue::from(surface));
     }
     Ok(js_surfaces)
-}
-
-fn format_surfaces(surface1: &FixedSurface, surface2: &FixedSurface) -> String {
-    let type1 = CodeTable4_5
-        .lookup(usize::from(surface1.surface_type))
-        .to_string();
-    let value1 = surface1.value();
-    let unit1 = surface1.unit().unwrap_or("");
-
-    let surface1_string = format!("{}: {}{}", type1, value1, unit1);
-    if surface2.surface_type == 255 {
-        // surface 2 is missing: only format surface 1 to string
-        return surface1_string;
-    } else {
-        let type2 = CodeTable4_5
-            .lookup(usize::from(surface2.surface_type))
-            .to_string();
-        let value2 = surface2.value();
-        let unit2 = surface2.unit().unwrap_or("");
-        return format!("{} - {}: {}{}", surface1_string, type2, value2, unit2);
-    }
 }
 
 #[wasm_bindgen]
@@ -475,4 +452,78 @@ pub fn find_min_max_magnitude(bytes: &[u8], key_u: &str, key_v: &str) -> Result<
     )
     .expect("failed to set max");
     Ok(JsValue::from(result))
+}
+
+#[wasm_bindgen]
+pub fn get_message_info(
+    bytes: &[u8],
+    parameter_key: &str,
+    surface_key: &str,
+    time: i64,
+) -> Result<JsValue, JsValue> {
+    let (discipline, category, parameter) = grib_parameter_from_key(parameter_key)?;
+    let (surface1, surface2) = fixed_surfaces_from_key(surface_key)?;
+
+    let message_index = find_grib_index(
+        bytes, discipline, category, parameter, &surface1, &surface2, time,
+    )
+    .map_err(|e| JsValue::from(e))?;
+
+    // Parse the GRIB2 message.
+    let grib2 = grib::from_bytes(bytes).map_err(|e| JsValue::from(GribViewerError::from(e)))?;
+
+    // Find the target submessage.
+    let (_index, submessage) = grib2
+        .iter()
+        .find(|(index, _)| *index == message_index)
+        .ok_or_else(|| {
+            GribViewerError::MessageNotFound(format!(
+                "Index {:?} not found in Grib file",
+                message_index
+            ))
+        })?;
+
+    // debug!("{:?}", submessage.dump());
+    let output = submessage.describe();
+    Ok(JsValue::from(output))
+}
+
+#[wasm_bindgen]
+pub fn get_message_dump(
+    bytes: &[u8],
+    parameter_key: &str,
+    surface_key: &str,
+    time: i64,
+) -> Result<JsValue, JsValue> {
+    let (discipline, category, parameter) = grib_parameter_from_key(parameter_key)?;
+    let (surface1, surface2) = fixed_surfaces_from_key(surface_key)?;
+
+    let message_index = find_grib_index(
+        bytes, discipline, category, parameter, &surface1, &surface2, time,
+    )
+    .map_err(|e| JsValue::from(e))?;
+
+    // Parse the GRIB2 message.
+    let grib2 = grib::from_bytes(bytes).map_err(|e| JsValue::from(GribViewerError::from(e)))?;
+
+    // Find the target submessage.
+    let (_index, submessage) = grib2
+        .iter()
+        .find(|(index, _)| *index == message_index)
+        .ok_or_else(|| {
+            GribViewerError::MessageNotFound(format!(
+                "Index {:?} not found in Grib file",
+                message_index
+            ))
+        })?;
+
+    let mut buffer = Vec::new();
+
+    submessage
+        .dump(&mut buffer)
+        .map_err(|e| GribViewerError::from(e))?;
+
+    Ok(JsValue::from(
+        String::from_utf8(buffer).map_err(|e| GribViewerError::Other(e.to_string()))?,
+    ))
 }

@@ -1,4 +1,6 @@
+use grib::codetables::{CodeTable4_5, Lookup};
 use grib::{FixedSurface, Grib2, GridDefinitionTemplateValues, MessageIndex, SubMessage};
+
 use log::warn;
 use std::io::Read;
 
@@ -222,6 +224,7 @@ pub(crate) fn fixed_surfaces_from_key(
     ))
 }
 
+// TODO: turn this into function find_grib_submessage
 pub(crate) fn find_grib_index(
     bytes: &[u8],
     discipline: u8,
@@ -339,4 +342,25 @@ pub(crate) fn get_lat_lon_1d_without_jump(
         }
     }
     return Ok((lat, lon));
+}
+
+pub(crate) fn format_surfaces(surface1: &FixedSurface, surface2: &FixedSurface) -> String {
+    let type1 = CodeTable4_5
+        .lookup(usize::from(surface1.surface_type))
+        .to_string();
+    let value1 = surface1.value();
+    let unit1 = surface1.unit().unwrap_or("");
+
+    let surface1_string = format!("{}: {}{}", type1, value1, unit1);
+    if surface2.surface_type == 255 {
+        // surface 2 is missing: only format surface 1 to string
+        return surface1_string;
+    } else {
+        let type2 = CodeTable4_5
+            .lookup(usize::from(surface2.surface_type))
+            .to_string();
+        let value2 = surface2.value();
+        let unit2 = surface2.unit().unwrap_or("");
+        return format!("{} - {}: {}{}", surface1_string, type2, value2, unit2);
+    }
 }

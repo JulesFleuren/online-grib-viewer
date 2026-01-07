@@ -6,6 +6,8 @@ import init, {
   get_available_surfaces,
   get_available_timestamps,
   query_grib_message_at_point,
+  get_message_info,
+  get_message_dump,
 } from "../pkg/online_grib_viewer.js";
 import GribOverlayManager from "./overlays.js";
 import { GribKey } from "./gribKey.js";
@@ -97,14 +99,14 @@ async function loadFile(file: File) {
     heatmapSelect.appendChild(emptyOption);
   }
   // add option to plot magnitude of vector field
-  const option = document.createElement("option");
-  option.value = "magnitudeVectorField";
-  option.id = "magnitudeVectorFieldOption";
-  option.textContent = "Magnitude of Vector Field";
+  const magVFoption = document.createElement("option");
+  magVFoption.value = "magnitudeVectorField";
+  magVFoption.id = "magnitudeVectorFieldOption";
+  magVFoption.textContent = "Magnitude of Vector Field";
   if (vectorFieldSelect.options.length == 1) {
-    option.disabled = true;
+    magVFoption.disabled = true;
   }
-  heatmapSelect.appendChild(option);
+  heatmapSelect.appendChild(magVFoption);
 
   // add all available parameters as options
   parameters.forEach((p) => {
@@ -128,7 +130,7 @@ async function loadFile(file: File) {
       // skip the first because that is the empty option, skip the second, because that is the
       // magnitudeVectorField option, which should be disabled when this else clause is reached
       heatmapSelect.value = heatmapSelect.options[2].value;
-      updateHeatmapSurfaceSelect();
+      // updateHeatmapSurfaceSelect();
     } else {
       // No grib messages found
       heatmapSelect.value = heatmapSelect.options[0].value;
@@ -155,7 +157,7 @@ function updateVectorFieldSurfaceSelect() {
 
   if (selectedVFParameter === "None") {
     vectorFieldSurfaceSelect.disabled = true;
-    updateTimeSelect();
+    updateHeatmapSurfaceSelect();
     return;
   }
 
@@ -192,7 +194,7 @@ function updateVectorFieldSurfaceSelect() {
   // automatically select the first parameter
   vectorFieldSurfaceSelect.value = vectorFieldSurfaceSelect.options[0].value;
   vectorFieldSurfaceSelect.disabled = false;
-  updateTimeSelect();
+  updateHeatmapSurfaceSelect();
 }
 
 function updateHeatmapSurfaceSelect() {
@@ -209,6 +211,10 @@ function updateHeatmapSurfaceSelect() {
     "heatmapSurfaceSelect",
   ) as HTMLSelectElement;
 
+  const infoBtn = document.getElementById(
+    "messageInfoButton",
+  ) as HTMLButtonElement;
+
   heatmapSurfaceSelect.innerHTML = "";
 
   if (
@@ -216,7 +222,8 @@ function updateHeatmapSurfaceSelect() {
     selectedHMParameter === "magnitudeVectorField"
   ) {
     heatmapSurfaceSelect.disabled = true;
-    updateDisplayedParameters();
+    infoBtn.disabled = true;
+    updateTimeSelect();
     return;
   }
 
@@ -243,6 +250,7 @@ function updateHeatmapSurfaceSelect() {
   // automatically select the first parameter and show the timesteps
   heatmapSurfaceSelect.value = heatmapSurfaceSelect.options[0].value;
   heatmapSurfaceSelect.disabled = false;
+  infoBtn.disabled = false;
   updateTimeSelect();
 }
 
@@ -536,10 +544,10 @@ init().then(() => {
     },
   }).setView([0, 0], 2);
 
-  const URL = "https://api.protomaps.com/tiles/v4/{z}/{x}/{y}.mvt";
+  const basemapUrl = "https://api.protomaps.com/tiles/v4/{z}/{x}/{y}.mvt";
   const layer = leafletLayer({
     // @ts-expect-error: some weird error about env not being a recognised property
-    url: URL + `?key=${import.meta.env.VITE_PROTOMAPS_API_KEY}`,
+    url: basemapUrl + `?key=${import.meta.env.VITE_PROTOMAPS_API_KEY}`,
     flavor: "light",
     lang: "en",
     maxDataZoom: 11,
@@ -653,6 +661,90 @@ init().then(() => {
     updateSelectedTime(
       findPreviousTimestamp(selectedTime!, getAvailableTimes()),
     );
+  });
+
+  // ===== message info button event listeners =====
+  const infoBtn = document.getElementById(
+    "messageInfoButton",
+  ) as HTMLButtonElement;
+  const infoModal = document.getElementById(
+    "messageInfoModal",
+  ) as HTMLDivElement;
+  const modalCloseBtn = document.getElementById(
+    "modalCloseButton",
+  ) as HTMLButtonElement;
+  const dumpBtn = document.getElementById(
+    "messageDumpButton",
+  ) as HTMLButtonElement;
+
+  infoBtn.addEventListener("click", () => {
+    const heatmapSelect = document.getElementById(
+      "heatmapParameterSelect",
+    ) as HTMLSelectElement;
+    const selectedHMParameter = heatmapSelect.value;
+
+    const heatmapSurfaceSelect = document.getElementById(
+      "heatmapSurfaceSelect",
+    ) as HTMLSelectElement;
+    let selectedHMSurface = heatmapSurfaceSelect.value ?? null;
+
+    if (
+      !gribOverlayManager ||
+      selectedHMParameter == "None" ||
+      selectedHMParameter == "magnitudeVectorField"
+    ) {
+      return;
+    }
+
+    const content = get_message_info(
+      gribOverlayManager.gribBytes,
+      selectedHMParameter,
+      selectedHMSurface,
+      selectedTime!,
+    );
+
+    const messageInfoModalBody = document.getElementById(
+      "messageInfoModalBody",
+    ) as HTMLElement;
+    messageInfoModalBody.textContent = content;
+    infoModal.classList.add("is-active");
+  });
+
+  modalCloseBtn.addEventListener("click", () => {
+    infoModal.classList.remove("is-active");
+  });
+
+  dumpBtn.addEventListener("click", () => {
+    const heatmapSelect = document.getElementById(
+      "heatmapParameterSelect",
+    ) as HTMLSelectElement;
+    const selectedHMParameter = heatmapSelect.value;
+
+    const heatmapSurfaceSelect = document.getElementById(
+      "heatmapSurfaceSelect",
+    ) as HTMLSelectElement;
+    let selectedHMSurface = heatmapSurfaceSelect.value ?? null;
+
+    if (
+      !gribOverlayManager ||
+      selectedHMParameter == "None" ||
+      selectedHMParameter == "magnitudeVectorField"
+    ) {
+      return;
+    }
+
+    const dump = get_message_dump(
+      gribOverlayManager.gribBytes,
+      selectedHMParameter,
+      selectedHMSurface,
+      selectedTime!,
+    );
+
+    // Open in new tab
+    const blob = new Blob([dump], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+
+    window.open(url, "_blank");
   });
 
   // ===== interaction with map =====
