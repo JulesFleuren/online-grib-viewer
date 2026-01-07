@@ -224,6 +224,7 @@ pub(crate) fn fixed_surfaces_from_key(
     ))
 }
 
+// TODO: turn this into function find_grib_submessage
 pub(crate) fn find_grib_index(
     bytes: &[u8],
     discipline: u8,

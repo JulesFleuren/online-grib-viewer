@@ -453,3 +453,77 @@ pub fn find_min_max_magnitude(bytes: &[u8], key_u: &str, key_v: &str) -> Result<
     .expect("failed to set max");
     Ok(JsValue::from(result))
 }
+
+#[wasm_bindgen]
+pub fn get_message_info(
+    bytes: &[u8],
+    parameter_key: &str,
+    surface_key: &str,
+    time: i64,
+) -> Result<JsValue, JsValue> {
+    let (discipline, category, parameter) = grib_parameter_from_key(parameter_key)?;
+    let (surface1, surface2) = fixed_surfaces_from_key(surface_key)?;
+
+    let message_index = find_grib_index(
+        bytes, discipline, category, parameter, &surface1, &surface2, time,
+    )
+    .map_err(|e| JsValue::from(e))?;
+
+    // Parse the GRIB2 message.
+    let grib2 = grib::from_bytes(bytes).map_err(|e| JsValue::from(GribViewerError::from(e)))?;
+
+    // Find the target submessage.
+    let (_index, submessage) = grib2
+        .iter()
+        .find(|(index, _)| *index == message_index)
+        .ok_or_else(|| {
+            GribViewerError::MessageNotFound(format!(
+                "Index {:?} not found in Grib file",
+                message_index
+            ))
+        })?;
+
+    // debug!("{:?}", submessage.dump());
+    let output = submessage.describe();
+    Ok(JsValue::from(output))
+}
+
+#[wasm_bindgen]
+pub fn get_message_dump(
+    bytes: &[u8],
+    parameter_key: &str,
+    surface_key: &str,
+    time: i64,
+) -> Result<JsValue, JsValue> {
+    let (discipline, category, parameter) = grib_parameter_from_key(parameter_key)?;
+    let (surface1, surface2) = fixed_surfaces_from_key(surface_key)?;
+
+    let message_index = find_grib_index(
+        bytes, discipline, category, parameter, &surface1, &surface2, time,
+    )
+    .map_err(|e| JsValue::from(e))?;
+
+    // Parse the GRIB2 message.
+    let grib2 = grib::from_bytes(bytes).map_err(|e| JsValue::from(GribViewerError::from(e)))?;
+
+    // Find the target submessage.
+    let (_index, submessage) = grib2
+        .iter()
+        .find(|(index, _)| *index == message_index)
+        .ok_or_else(|| {
+            GribViewerError::MessageNotFound(format!(
+                "Index {:?} not found in Grib file",
+                message_index
+            ))
+        })?;
+
+    let mut buffer = Vec::new();
+
+    submessage
+        .dump(&mut buffer)
+        .map_err(|e| GribViewerError::from(e))?;
+
+    Ok(JsValue::from(
+        String::from_utf8(buffer).map_err(|e| GribViewerError::Other(e.to_string()))?,
+    ))
+}
