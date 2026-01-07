@@ -252,64 +252,6 @@ pub(crate) fn fixed_surfaces_from_key(
     ))
 }
 
-// TODO: turn this into function find_grib_submessage
-pub(crate) fn find_grib_index(
-    bytes: &[u8],
-    discipline: u8,
-    category: u8,
-    parameter: u8,
-    surface1: &FixedSurface,
-    surface2: &FixedSurface,
-    time: i64,
-) -> Result<(usize, usize), GribViewerError> {
-    let grib2 = grib::from_bytes(bytes)?;
-    for ((index, subindex), message) in grib2.iter() {
-        let d = message.indicator().discipline;
-        let prod_def = message.prod_def();
-        let Some(c) = prod_def.parameter_category() else {
-            warn!(
-                "Unsupported product definition template number: {}, skipping message",
-                prod_def.prod_tmpl_num()
-            );
-            continue;
-        };
-        let p = prod_def
-            .parameter_number()
-            .expect("parameter_category() should have failed");
-
-        let temporal_info = grib::TemporalInfo::from(&message.temporal_raw_info());
-        let Some(t) = temporal_info.forecast_time_target else {
-            warn!(
-                "Message with invalid forecast time, skipping message {:?}",
-                index
-            );
-            continue;
-        };
-
-        let Some((s1, s2)) = prod_def.fixed_surfaces() else {
-            warn!(
-                "Unsupported product definition template number: {}, skipping message {:?}",
-                prod_def.prod_tmpl_num(),
-                index
-            );
-            continue;
-        };
-        if d == discipline
-            && c == category
-            && p == parameter
-            && t.timestamp() == time
-            && s1 == *surface1
-            && s2 == *surface2
-        {
-            return Ok((index, subindex));
-        }
-    }
-    Err(GribViewerError::MessageNotFound(format!(
-        "No message with: disc: {}, cat: {}, param: {}, time: {}",
-        discipline, category, parameter, time
-    )))
-}
-
 /// For regular grids: get the occuring lats and longs from lowest to highest.
 ///
 /// Usually values will be between 0 and 360 degrees, except when they cross 0 longitude, then longitudes can be below
