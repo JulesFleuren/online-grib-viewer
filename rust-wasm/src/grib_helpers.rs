@@ -8,6 +8,8 @@ use std::io::Read;
 
 use crate::error::GribViewerError;
 
+// ==== Get message / filter messages from Grib2 ====
+
 /// Filter grib.iter() so that the iterator only yields submessages with the right parameter
 pub(crate) fn iter_messages_of_parameter<'a, R: Read>(
     grib: &'a Grib2<R>,
@@ -148,6 +150,8 @@ pub(crate) fn get_message<'a, R: Read>(
     )))
 }
 
+// ==== Extract information from message ====
+
 pub(crate) fn get_grid_and_values<R: Grib2Read>(
     submessage: SubMessage<'_, R>,
 ) -> Result<(GridDefinitionTemplateValues, Vec<f32>), GribViewerError> {
@@ -189,67 +193,6 @@ pub(crate) fn get_lat_lon_and_values<R: Grib2Read>(
     let values = values_iterator.collect();
 
     Ok((lats, lons, values))
-}
-
-pub(crate) fn grib_parameter_from_key(key: &str) -> Result<(u8, u8, u8), GribViewerError> {
-    let parts: Vec<&str> = key.split('_').collect();
-    if parts.len() != 4 || parts[0] != "grib2" {
-        return Err(GribViewerError::InvalidKey(
-            "invalid key format, expected 'grib2_<discipline>_<category>_<parameter>'".to_string(),
-        ));
-    }
-    let discipline: u8 = parts[1]
-        .parse()
-        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse discipline: {}", e)))?;
-    let category: u8 = parts[2]
-        .parse()
-        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse category: {}", e)))?;
-    let parameter: u8 = parts[3]
-        .parse()
-        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse parameter: {}", e)))?;
-    Ok((discipline, category, parameter))
-}
-
-pub(crate) fn fixed_surfaces_from_key(
-    key: &str,
-) -> Result<(FixedSurface, FixedSurface), GribViewerError> {
-    let parts: Vec<&str> = key.split('_').collect();
-    if parts.len() != 7 || parts[0] != "surface" {
-        return Err(GribViewerError::InvalidKey(
-            "invalid key format, expected 'surface_<t1>_<f1>_<v1>_<t2>_<f2>_<v2>'".to_string(),
-        ));
-    }
-    let surface_type1: u8 = parts[1]
-        .parse()
-        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse surface_type: {}", e)))?;
-    let scale_factor1: i8 = parts[2]
-        .parse()
-        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse scale_factor: {}", e)))?;
-    let scaled_value1: i32 = parts[3]
-        .parse()
-        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse scaled_value: {}", e)))?;
-    let surface_type2: u8 = parts[4]
-        .parse()
-        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse surface_type: {}", e)))?;
-    let scale_factor2: i8 = parts[5]
-        .parse()
-        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse scale_factor: {}", e)))?;
-    let scaled_value2: i32 = parts[6]
-        .parse()
-        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse scaled_value: {}", e)))?;
-
-    Ok((
-        FixedSurface {
-            surface_type: surface_type1,
-            scale_factor: scale_factor1,
-            scaled_value: scaled_value1,
-        },
-        FixedSurface {
-            surface_type: surface_type2,
-            scale_factor: scale_factor2,
-            scaled_value: scaled_value2,
-        },
-    ))
 }
 
 /// For regular grids: get the occuring lats and longs from lowest to highest.
@@ -312,6 +255,69 @@ pub(crate) fn get_lat_lon_1d_without_jump(
         }
     }
     return Ok((lat, lon));
+}
+
+// ==== formatting and conversion of keys ====
+
+pub(crate) fn grib_parameter_from_key(key: &str) -> Result<(u8, u8, u8), GribViewerError> {
+    let parts: Vec<&str> = key.split('_').collect();
+    if parts.len() != 4 || parts[0] != "grib2" {
+        return Err(GribViewerError::InvalidKey(
+            "invalid key format, expected 'grib2_<discipline>_<category>_<parameter>'".to_string(),
+        ));
+    }
+    let discipline: u8 = parts[1]
+        .parse()
+        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse discipline: {}", e)))?;
+    let category: u8 = parts[2]
+        .parse()
+        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse category: {}", e)))?;
+    let parameter: u8 = parts[3]
+        .parse()
+        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse parameter: {}", e)))?;
+    Ok((discipline, category, parameter))
+}
+
+pub(crate) fn fixed_surfaces_from_key(
+    key: &str,
+) -> Result<(FixedSurface, FixedSurface), GribViewerError> {
+    let parts: Vec<&str> = key.split('_').collect();
+    if parts.len() != 7 || parts[0] != "surface" {
+        return Err(GribViewerError::InvalidKey(
+            "invalid key format, expected 'surface_<t1>_<f1>_<v1>_<t2>_<f2>_<v2>'".to_string(),
+        ));
+    }
+    let surface_type1: u8 = parts[1]
+        .parse()
+        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse surface_type: {}", e)))?;
+    let scale_factor1: i8 = parts[2]
+        .parse()
+        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse scale_factor: {}", e)))?;
+    let scaled_value1: i32 = parts[3]
+        .parse()
+        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse scaled_value: {}", e)))?;
+    let surface_type2: u8 = parts[4]
+        .parse()
+        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse surface_type: {}", e)))?;
+    let scale_factor2: i8 = parts[5]
+        .parse()
+        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse scale_factor: {}", e)))?;
+    let scaled_value2: i32 = parts[6]
+        .parse()
+        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse scaled_value: {}", e)))?;
+
+    Ok((
+        FixedSurface {
+            surface_type: surface_type1,
+            scale_factor: scale_factor1,
+            scaled_value: scaled_value1,
+        },
+        FixedSurface {
+            surface_type: surface_type2,
+            scale_factor: scale_factor2,
+            scaled_value: scaled_value2,
+        },
+    ))
 }
 
 pub(crate) fn format_surfaces(surface1: &FixedSurface, surface2: &FixedSurface) -> String {
