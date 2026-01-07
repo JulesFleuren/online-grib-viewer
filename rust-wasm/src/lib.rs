@@ -464,26 +464,12 @@ pub fn get_message_info(
     let (discipline, category, parameter) = grib_parameter_from_key(parameter_key)?;
     let (surface1, surface2) = fixed_surfaces_from_key(surface_key)?;
 
-    let message_index = find_grib_index(
-        bytes, discipline, category, parameter, &surface1, &surface2, time,
-    )
-    .map_err(|e| JsValue::from(e))?;
-
-    // Parse the GRIB2 message.
     let grib2 = grib::from_bytes(bytes).map_err(|e| JsValue::from(GribViewerError::from(e)))?;
 
-    // Find the target submessage.
-    let (_index, submessage) = grib2
-        .iter()
-        .find(|(index, _)| *index == message_index)
-        .ok_or_else(|| {
-            GribViewerError::MessageNotFound(format!(
-                "Index {:?} not found in Grib file",
-                message_index
-            ))
-        })?;
+    let submessage = get_message(
+        &grib2, discipline, category, parameter, &surface1, &surface2, time,
+    )?;
 
-    // debug!("{:?}", submessage.dump());
     let output = submessage.describe();
     Ok(JsValue::from(output))
 }
@@ -498,24 +484,11 @@ pub fn get_message_dump(
     let (discipline, category, parameter) = grib_parameter_from_key(parameter_key)?;
     let (surface1, surface2) = fixed_surfaces_from_key(surface_key)?;
 
-    let message_index = find_grib_index(
-        bytes, discipline, category, parameter, &surface1, &surface2, time,
-    )
-    .map_err(|e| JsValue::from(e))?;
-
-    // Parse the GRIB2 message.
     let grib2 = grib::from_bytes(bytes).map_err(|e| JsValue::from(GribViewerError::from(e)))?;
 
-    // Find the target submessage.
-    let (_index, submessage) = grib2
-        .iter()
-        .find(|(index, _)| *index == message_index)
-        .ok_or_else(|| {
-            GribViewerError::MessageNotFound(format!(
-                "Index {:?} not found in Grib file",
-                message_index
-            ))
-        })?;
+    let submessage = get_message(
+        &grib2, discipline, category, parameter, &surface1, &surface2, time,
+    )?;
 
     let mut buffer = Vec::new();
 
