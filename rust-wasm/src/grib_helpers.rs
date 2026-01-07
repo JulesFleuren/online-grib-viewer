@@ -1,5 +1,7 @@
 use grib::codetables::{CodeTable4_5, Lookup};
-use grib::{FixedSurface, Grib2, GridDefinitionTemplateValues, MessageIndex, SubMessage};
+use grib::{
+    FixedSurface, Grib2, Grib2Read, GridDefinitionTemplateValues, MessageIndex, SubMessage,
+};
 
 use log::warn;
 use std::io::Read;
@@ -146,24 +148,9 @@ pub(crate) fn get_message<'a, R: Read>(
     )))
 }
 
-pub(crate) fn get_grid_and_values(
-    byte_string: &[u8],
-    message_index: (usize, usize),
+pub(crate) fn get_grid_and_values<R: Grib2Read>(
+    submessage: SubMessage<'_, R>,
 ) -> Result<(GridDefinitionTemplateValues, Vec<f32>), GribViewerError> {
-    // Parse the GRIB2 message.
-    let grib2 = grib::from_bytes(byte_string)?;
-
-    // Find the target submessage.
-    let (_index, submessage) = grib2
-        .iter()
-        .find(|(index, _)| *index == message_index)
-        .ok_or_else(|| {
-            GribViewerError::MessageNotFound(format!(
-                "Index {:?} not found in Grib file",
-                message_index
-            ))
-        })?;
-
     let grid_def = submessage.grid_def();
     let grid = GridDefinitionTemplateValues::try_from(grid_def)?;
 
@@ -181,24 +168,9 @@ pub(crate) fn get_grid_and_values(
     Ok((grid, values))
 }
 
-pub(crate) fn get_lat_lon_and_values(
-    byte_string: &[u8],
-    message_index: (usize, usize),
+pub(crate) fn get_lat_lon_and_values<R: Grib2Read>(
+    submessage: SubMessage<'_, R>,
 ) -> Result<(Vec<f32>, Vec<f32>, Vec<f32>), GribViewerError> {
-    // Parse the GRIB2 message.
-    let grib2 = grib::from_bytes(byte_string)?;
-
-    // Find the target submessage.
-    let (_index, submessage) = grib2
-        .iter()
-        .find(|(index, _)| *index == message_index)
-        .ok_or_else(|| {
-            GribViewerError::MessageNotFound(format!(
-                "Index {:?} not found in Grib file",
-                message_index
-            ))
-        })?;
-
     // Obtain latitude-longitude locations as an iterator.
     let latlons = submessage.latlons()?;
 

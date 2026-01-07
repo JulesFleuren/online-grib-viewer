@@ -177,11 +177,12 @@ pub fn query_grib_message_at_point(
     let (discipline, category, parameter) = grib_parameter_from_key(parameter_key)?;
     let (surface1, surface2) = fixed_surfaces_from_key(surface_key)?;
 
-    let (index, subindex) = find_grib_index(
-        bytes, discipline, category, parameter, &surface1, &surface2, time,
-    )
-    .map_err(|e| JsValue::from(e))?;
-    let (lat, lon, values) = get_lat_lon_and_values(bytes, (index, subindex))?;
+    let grib2 = grib::from_bytes(bytes).map_err(|e| JsValue::from(GribViewerError::from(e)))?;
+
+    let message = get_message(
+        &grib2, discipline, category, parameter, &surface1, &surface2, time,
+    )?;
+    let (lat, lon, values) = get_lat_lon_and_values(message)?;
 
     let nearest_point_index = find_closest_point_in_grid(&lat, &lon, query_lat, query_lon);
 
@@ -217,10 +218,13 @@ pub fn get_scalar_field(
     let (discipline, category, parameter) = grib_parameter_from_key(parameter_key)?;
     let (surface1, surface2) = fixed_surfaces_from_key(surface_key)?;
 
-    let (index, subindex) = find_grib_index(
-        bytes, discipline, category, parameter, &surface1, &surface2, time,
+    let grib2 = grib::from_bytes(bytes).map_err(|e| JsValue::from(GribViewerError::from(e)))?;
+
+    let message = get_message(
+        &grib2, discipline, category, parameter, &surface1, &surface2, time,
     )?;
-    let (lat, lon, values) = get_lat_lon_and_values(bytes, (index, subindex))?;
+
+    let (lat, lon, values) = get_lat_lon_and_values(message)?;
     // Convert Rust Vec<f32> to JS Float32Array
     let lat = Float32Array::from(lat.as_slice());
     let lon = Float32Array::from(lon.as_slice());
@@ -251,19 +255,22 @@ pub fn vector_field_overlay(
 
     let (surface1, surface2) = fixed_surfaces_from_key(surface_key)?;
 
+    let grib2 = grib::from_bytes(bytes).map_err(|e| JsValue::from(GribViewerError::from(e)))?;
+
     let param_u = grib_parameter_from_key(param_key_u)?;
-    let index_u = find_grib_index(
-        bytes, param_u.0, param_u.1, param_u.2, &surface1, &surface2, time,
+    let message_u = get_message(
+        &grib2, param_u.0, param_u.1, param_u.2, &surface1, &surface2, time,
     )?;
+
     let param_v = grib_parameter_from_key(param_key_v)?;
-    let index_v = find_grib_index(
-        bytes, param_v.0, param_v.1, param_v.2, &surface1, &surface2, time,
+    let message_v = get_message(
+        &grib2, param_v.0, param_v.1, param_v.2, &surface1, &surface2, time,
     )?;
 
     // it is assumed that u and v have the same grid
     // // TODO: should this be checked?
-    let (grid, u) = get_grid_and_values(bytes, index_u)?;
-    let (_grid, v) = get_grid_and_values(bytes, index_v)?;
+    let (grid, u) = get_grid_and_values(message_u)?;
+    let (_grid, v) = get_grid_and_values(message_v)?;
 
     let svg_overlay = generate_vector_field_svg_overlay(&grid, u, v, zoom_level, settings)?;
 
@@ -281,12 +288,16 @@ pub fn heatmap_overlay(
     let settings = serde_wasm_bindgen::from_value(settings)
         .map_err(|e| GribViewerError::Other(format!("Error deserializing settings: {}", e)))?;
 
+    let (discipline, category, parameter) = grib_parameter_from_key(param_key)?;
     let (surface1, surface2) = fixed_surfaces_from_key(surface_key)?;
 
-    let param = grib_parameter_from_key(param_key)?;
-    let index = find_grib_index(bytes, param.0, param.1, param.2, &surface1, &surface2, time)?;
+    let grib2 = grib::from_bytes(bytes).map_err(|e| JsValue::from(GribViewerError::from(e)))?;
 
-    let (grid, values) = get_grid_and_values(bytes, index)?;
+    let message = get_message(
+        &grib2, discipline, category, parameter, &surface1, &surface2, time,
+    )?;
+
+    let (grid, values) = get_grid_and_values(message)?;
 
     let image_overlay = generate_heatmap_overlay(&grid, values, settings)?;
 
@@ -307,19 +318,22 @@ pub fn magnitude_heatmap_overlay(
 
     let (surface1, surface2) = fixed_surfaces_from_key(surface_key)?;
 
+    let grib2 = grib::from_bytes(bytes).map_err(|e| JsValue::from(GribViewerError::from(e)))?;
+
     let param_u = grib_parameter_from_key(param_key_u)?;
-    let index_u = find_grib_index(
-        bytes, param_u.0, param_u.1, param_u.2, &surface1, &surface2, time,
+    let message_u = get_message(
+        &grib2, param_u.0, param_u.1, param_u.2, &surface1, &surface2, time,
     )?;
+
     let param_v = grib_parameter_from_key(param_key_v)?;
-    let index_v = find_grib_index(
-        bytes, param_v.0, param_v.1, param_v.2, &surface1, &surface2, time,
+    let message_v = get_message(
+        &grib2, param_v.0, param_v.1, param_v.2, &surface1, &surface2, time,
     )?;
 
     // it is assumed that u and v have the same grid
     // TODO: should this be checked?
-    let (grid, u) = get_grid_and_values(bytes, index_u)?;
-    let (_grid, v) = get_grid_and_values(bytes, index_v)?;
+    let (grid, u) = get_grid_and_values(message_u)?;
+    let (_grid, v) = get_grid_and_values(message_v)?;
 
     let values = norm(&u, &v);
 
@@ -466,11 +480,11 @@ pub fn get_message_info(
 
     let grib2 = grib::from_bytes(bytes).map_err(|e| JsValue::from(GribViewerError::from(e)))?;
 
-    let submessage = get_message(
+    let message = get_message(
         &grib2, discipline, category, parameter, &surface1, &surface2, time,
     )?;
 
-    let output = submessage.describe();
+    let output = message.describe();
     Ok(JsValue::from(output))
 }
 
@@ -486,13 +500,13 @@ pub fn get_message_dump(
 
     let grib2 = grib::from_bytes(bytes).map_err(|e| JsValue::from(GribViewerError::from(e)))?;
 
-    let submessage = get_message(
+    let message = get_message(
         &grib2, discipline, category, parameter, &surface1, &surface2, time,
     )?;
 
     let mut buffer = Vec::new();
 
-    submessage
+    message
         .dump(&mut buffer)
         .map_err(|e| GribViewerError::from(e))?;
 
