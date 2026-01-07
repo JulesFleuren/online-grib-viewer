@@ -90,6 +90,62 @@ pub(crate) fn iter_messages_of_parameter_and_surface<'a, R: Read>(
     })
 }
 
+pub(crate) fn get_message<'a, R: Read>(
+    grib: &'a Grib2<R>,
+    discipline: u8,
+    category: u8,
+    parameter: u8,
+    surface1: &FixedSurface,
+    surface2: &FixedSurface,
+    time: i64,
+) -> Result<SubMessage<'a, R>, GribViewerError> {
+    for (index, message) in grib.iter() {
+        let d = message.indicator().discipline;
+        let prod_def = message.prod_def();
+        let Some(c) = prod_def.parameter_category() else {
+            warn!(
+                "Unsupported product definition template number: {}, skipping message",
+                prod_def.prod_tmpl_num()
+            );
+            continue;
+        };
+        let p = prod_def
+            .parameter_number()
+            .expect("parameter_category() should have failed");
+
+        let temporal_info = grib::TemporalInfo::from(&message.temporal_raw_info());
+        let Some(t) = temporal_info.forecast_time_target else {
+            warn!(
+                "Message with invalid forecast time, skipping message {:?}",
+                index
+            );
+            continue;
+        };
+
+        let Some((s1, s2)) = prod_def.fixed_surfaces() else {
+            warn!(
+                "Unsupported product definition template number: {}, skipping message {:?}",
+                prod_def.prod_tmpl_num(),
+                index
+            );
+            continue;
+        };
+        if d == discipline
+            && c == category
+            && p == parameter
+            && t.timestamp() == time
+            && s1 == *surface1
+            && s2 == *surface2
+        {
+            return Ok(message);
+        }
+    }
+    Err(GribViewerError::MessageNotFound(format!(
+        "No message with: disc: {}, cat: {}, param: {}, time: {}",
+        discipline, category, parameter, time
+    )))
+}
+
 pub(crate) fn get_grid_and_values(
     byte_string: &[u8],
     message_index: (usize, usize),
