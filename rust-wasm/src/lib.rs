@@ -258,19 +258,23 @@ pub fn vector_field_overlay(
     let grib2 = grib::from_bytes(bytes).map_err(|e| JsValue::from(GribViewerError::from(e)))?;
 
     let param_u = grib_parameter_from_key(param_key_u)?;
-    let message_u = get_message(
-        &grib2, param_u.0, param_u.1, param_u.2, &surface1, &surface2, time,
-    )?;
-
-    let param_v = grib_parameter_from_key(param_key_v)?;
-    let message_v = get_message(
-        &grib2, param_v.0, param_v.1, param_v.2, &surface1, &surface2, time,
-    )?;
+    // This structure is to prevent a panic about reborrowing. In this way message_u lives as short as possible
+    let (grid, u) = {
+        let message_u = get_message(
+            &grib2, param_u.0, param_u.1, param_u.2, &surface1, &surface2, time,
+        )?;
+        get_grid_and_values(message_u)?
+    };
 
     // it is assumed that u and v have the same grid
-    // // TODO: should this be checked?
-    let (grid, u) = get_grid_and_values(message_u)?;
-    let (_grid, v) = get_grid_and_values(message_v)?;
+    // TODO: should this be checked?
+    let param_v = grib_parameter_from_key(param_key_v)?;
+    let (_grid, v) = {
+        let message_v = get_message(
+            &grib2, param_v.0, param_v.1, param_v.2, &surface1, &surface2, time,
+        )?;
+        get_grid_and_values(message_v)?
+    };
 
     let svg_overlay = generate_vector_field_svg_overlay(&grid, u, v, zoom_level, settings)?;
 
@@ -293,11 +297,14 @@ pub fn heatmap_overlay(
 
     let grib2 = grib::from_bytes(bytes).map_err(|e| JsValue::from(GribViewerError::from(e)))?;
 
-    let message = get_message(
-        &grib2, discipline, category, parameter, &surface1, &surface2, time,
-    )?;
+    // This structure is to prevent a panic about reborrowing. In this way message lives as short as possible
+    let (grid, values) = {
+        let message = get_message(
+            &grib2, discipline, category, parameter, &surface1, &surface2, time,
+        )?;
 
-    let (grid, values) = get_grid_and_values(message)?;
+        get_grid_and_values(message)?
+    };
 
     let image_overlay = generate_heatmap_overlay(&grid, values, settings)?;
 
@@ -321,19 +328,23 @@ pub fn magnitude_heatmap_overlay(
     let grib2 = grib::from_bytes(bytes).map_err(|e| JsValue::from(GribViewerError::from(e)))?;
 
     let param_u = grib_parameter_from_key(param_key_u)?;
-    let message_u = get_message(
-        &grib2, param_u.0, param_u.1, param_u.2, &surface1, &surface2, time,
-    )?;
-
-    let param_v = grib_parameter_from_key(param_key_v)?;
-    let message_v = get_message(
-        &grib2, param_v.0, param_v.1, param_v.2, &surface1, &surface2, time,
-    )?;
+    // This structure is to prevent a panic about reborrowing. In this way message_u lives as short as possible
+    let (grid, u) = {
+        let message_u = get_message(
+            &grib2, param_u.0, param_u.1, param_u.2, &surface1, &surface2, time,
+        )?;
+        get_grid_and_values(message_u)?
+    };
 
     // it is assumed that u and v have the same grid
     // TODO: should this be checked?
-    let (grid, u) = get_grid_and_values(message_u)?;
-    let (_grid, v) = get_grid_and_values(message_v)?;
+    let param_v = grib_parameter_from_key(param_key_v)?;
+    let (_grid, v) = {
+        let message_v = get_message(
+            &grib2, param_v.0, param_v.1, param_v.2, &surface1, &surface2, time,
+        )?;
+        get_grid_and_values(message_v)?
+    };
 
     let values = norm(&u, &v);
 
