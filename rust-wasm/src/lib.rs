@@ -87,111 +87,61 @@ impl GribViewer {
         }
         Ok(js_parameters)
     }
-}
 
-#[wasm_bindgen]
-pub fn get_available_parameters(bytes: &[u8]) -> Result<Vec<JsValue>, JsValue> {
-    let grib2 = grib::from_bytes(bytes).map_err(|e| GribViewerError::from(e))?;
-    let mut parameters: HashMap<String, (u8, u8, u8)> = HashMap::new();
-    for (_, message) in grib2.iter() {
-        let discipline = message.indicator().discipline;
-        let prod_def = message.prod_def();
-        let Some(category) = prod_def.parameter_category() else {
-            warn!(
-                "Unsupported product definition template number: {}, skipping message",
-                prod_def.prod_tmpl_num()
-            );
-            continue;
-        };
-        let parameter = prod_def
-            .parameter_number()
-            .expect("parameter_category() should have failed");
+    pub fn get_available_surfaces(&self, key: &str) -> Result<Vec<JsValue>, JsValue> {
+        let mut surfaces: HashMap<String, String> = HashMap::new();
+        let (discipline, category, parameter) = grib_parameter_from_key(key)?;
 
-        let parameter_name = CodeTable4_2::new(discipline, category).lookup(usize::from(parameter));
-
-        // insert parameter if it is not already present
-        parameters
-            .entry(parameter_name.to_string())
-            .or_insert((discipline, category, parameter));
-    }
-
-    let mut js_parameters: Vec<JsValue> = Vec::new();
-    for (parameter_name, (discipline_number, category_number, parameter_number)) in parameters {
-        let parameter = js_sys::Object::new();
-        js_sys::Reflect::set(
-            &parameter,
-            &JsValue::from_str("name"),
-            &JsValue::from(parameter_name.to_string()),
-        )
-        .expect("failed to set name");
-        js_sys::Reflect::set(
-            &parameter,
-            &JsValue::from_str("key"),
-            &JsValue::from(format!(
-                "grib2_{}_{}_{}",
-                discipline_number, category_number, parameter_number
-            )),
-        )
-        .expect("failed to set key");
-        js_parameters.push(JsValue::from(parameter));
-    }
-    Ok(js_parameters)
-}
-
-#[wasm_bindgen]
-pub fn get_available_surfaces(bytes: &[u8], key: &str) -> Result<Vec<JsValue>, JsValue> {
-    let grib2 = grib::from_bytes(bytes).map_err(|e| GribViewerError::from(e))?;
-
-    let mut surfaces: HashMap<String, String> = HashMap::new();
-    let (discipline, category, parameter) = grib_parameter_from_key(key)?;
-
-    for (index, message) in iter_messages_of_parameter(&grib2, discipline, category, parameter) {
-        if let Some(surfaces_info) = &message.prod_def().fixed_surfaces() {
-            let (surface1, surface2) = surfaces_info;
-            let surface_key = format!(
-                "surface_{}_{}_{}_{}_{}_{}",
-                surface1.surface_type,
-                surface1.scale_factor,
-                surface1.scaled_value,
-                surface2.surface_type,
-                surface2.scale_factor,
-                surface2.scaled_value
-            );
-            surfaces
-                .entry(surface_key)
-                .or_insert(format_surfaces(surface1, surface2));
-        } else {
-            warn!(
-                "Message with unsupported tamplate definition number, skipping message {:?}",
-                index
-            );
-            continue;
+        for (index, message) in
+            iter_messages_of_parameter(&self.grib2, discipline, category, parameter)
+        {
+            if let Some(surfaces_info) = &message.prod_def().fixed_surfaces() {
+                let (surface1, surface2) = surfaces_info;
+                let surface_key = format!(
+                    "surface_{}_{}_{}_{}_{}_{}",
+                    surface1.surface_type,
+                    surface1.scale_factor,
+                    surface1.scaled_value,
+                    surface2.surface_type,
+                    surface2.scale_factor,
+                    surface2.scaled_value
+                );
+                surfaces
+                    .entry(surface_key)
+                    .or_insert(format_surfaces(surface1, surface2));
+            } else {
+                warn!(
+                    "Message with unsupported tamplate definition number, skipping message {:?}",
+                    index
+                );
+                continue;
+            }
         }
+
+        let mut js_surfaces: Vec<JsValue> = Vec::new();
+
+        // iterate over items sorted by key
+        let mut surface_keys: Vec<_> = surfaces.keys().collect();
+        surface_keys.sort(); // requires K: Ord
+
+        for surface_key in surface_keys {
+            let surface = js_sys::Object::new();
+            js_sys::Reflect::set(
+                &surface,
+                &JsValue::from_str("key"),
+                &JsValue::from(surface_key),
+            )
+            .expect("failed to set name");
+            js_sys::Reflect::set(
+                &surface,
+                &JsValue::from_str("description"),
+                &JsValue::from(surfaces[surface_key].to_string()),
+            )
+            .expect("failed to set key");
+            js_surfaces.push(JsValue::from(surface));
+        }
+        Ok(js_surfaces)
     }
-
-    let mut js_surfaces: Vec<JsValue> = Vec::new();
-
-    // iterate over items sorted by key
-    let mut surface_keys: Vec<_> = surfaces.keys().collect();
-    surface_keys.sort(); // requires K: Ord
-
-    for surface_key in surface_keys {
-        let surface = js_sys::Object::new();
-        js_sys::Reflect::set(
-            &surface,
-            &JsValue::from_str("key"),
-            &JsValue::from(surface_key),
-        )
-        .expect("failed to set name");
-        js_sys::Reflect::set(
-            &surface,
-            &JsValue::from_str("description"),
-            &JsValue::from(surfaces[surface_key].to_string()),
-        )
-        .expect("failed to set key");
-        js_surfaces.push(JsValue::from(surface));
-    }
-    Ok(js_surfaces)
 }
 
 #[wasm_bindgen]

@@ -2,9 +2,9 @@ import L from "leaflet";
 import "leaflet.fullscreen";
 import { leafletLayer } from "protomaps-leaflet";
 import init, {
-  get_available_parameters,
+  // get_available_parameters,
   GribViewer,
-  get_available_surfaces,
+  // get_available_surfaces,
   get_available_timestamps,
   query_grib_message_at_point,
   get_message_info,
@@ -56,9 +56,7 @@ async function loadFile(file: File) {
   vectorPairs = await loadPairs();
   gribOverlayManager = new GribOverlayManager(gribBytes, map!, overlaySettings);
 
-  const gribViewer = new GribViewer(gribBytes);
-
-  const parameters = gribViewer.get_available_parameters();
+  const parameters = gribOverlayManager.gribViewer.get_available_parameters();
 
   const vectorFieldSelect = document.getElementById(
     "vectorFieldParameterSelect",
@@ -161,13 +159,11 @@ function updateVectorFieldSurfaceSelect() {
 
   const selectedParameter = new GribKey(selectedVFParameter);
 
-  var surfacesU = get_available_surfaces(
-    gribOverlayManager.gribBytes,
+  var surfacesU = gribOverlayManager.gribViewer.get_available_surfaces(
     selectedParameter.firstComponent,
   );
 
-  var surfacesV = get_available_surfaces(
-    gribOverlayManager.gribBytes,
+  var surfacesV = gribOverlayManager.gribViewer.get_available_surfaces(
     selectedParameter.secondComponent!,
   );
 
@@ -227,10 +223,10 @@ function updateHeatmapSurfaceSelect() {
 
   const selectedParameter = new GribKey(selectedHMParameter);
 
-  const availableSurfaces = get_available_surfaces(
-    gribOverlayManager.gribBytes,
-    selectedParameter.firstComponent,
-  );
+  const availableSurfaces =
+    gribOverlayManager.gribViewer.get_available_surfaces(
+      selectedParameter.firstComponent,
+    );
 
   if (availableSurfaces.length == 0) {
     throw new Error(

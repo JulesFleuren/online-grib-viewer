@@ -3,6 +3,7 @@ import L, { LatLngBounds } from "leaflet";
 import { GribKey } from "./gribKey.js";
 import { OverlaySettingsManager } from "./overlaySettings.js";
 import {
+  GribViewer,
   vector_field_overlay,
   heatmap_overlay,
   magnitude_heatmap_overlay,
@@ -23,7 +24,8 @@ interface VectorFieldLayer {
   time: bigint;
 }
 
-class GribOverlay {
+class GribOverlayManager {
+  gribViewer: GribViewer;
   gribBytes: Uint8Array;
   map: Map;
   overlaySettingsManager: OverlaySettingsManager;
@@ -39,6 +41,7 @@ class GribOverlay {
     map: Map,
     overlaySettingsManger: OverlaySettingsManager,
   ) {
+    this.gribViewer = new GribViewer(gribBytes);
     this.gribBytes = gribBytes;
     this.map = map;
     this.overlaySettingsManager = overlaySettingsManger;
@@ -328,4 +331,4 @@ class GribOverlay {
   }
 }
 
-export default GribOverlay;
+export default GribOverlayManager;
