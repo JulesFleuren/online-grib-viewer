@@ -1,10 +1,14 @@
 use grib::codetables::{CodeTable4_5, Lookup};
-use grib::{FixedSurface, Grib2, GridDefinitionTemplateValues, MessageIndex, SubMessage};
+use grib::{
+    FixedSurface, Grib2, Grib2Read, GridDefinitionTemplateValues, MessageIndex, SubMessage,
+};
 
 use log::warn;
 use std::io::Read;
 
 use crate::error::GribViewerError;
+
+// ==== Get message / filter messages from Grib2 ====
 
 /// Filter grib.iter() so that the iterator only yields submessages with the right parameter
 pub(crate) fn iter_messages_of_parameter<'a, R: Read>(
@@ -90,152 +94,16 @@ pub(crate) fn iter_messages_of_parameter_and_surface<'a, R: Read>(
     })
 }
 
-pub(crate) fn get_grid_and_values(
-    byte_string: &[u8],
-    message_index: (usize, usize),
-) -> Result<(GridDefinitionTemplateValues, Vec<f32>), GribViewerError> {
-    // Parse the GRIB2 message.
-    let grib2 = grib::from_bytes(byte_string)?;
-
-    // Find the target submessage.
-    let (_index, submessage) = grib2
-        .iter()
-        .find(|(index, _)| *index == message_index)
-        .ok_or_else(|| {
-            GribViewerError::MessageNotFound(format!(
-                "Index {:?} not found in Grib file",
-                message_index
-            ))
-        })?;
-
-    let grid_def = submessage.grid_def();
-    let grid = GridDefinitionTemplateValues::try_from(grid_def)?;
-
-    // Prepare a decoder.
-    let decoder = grib::Grib2SubmessageDecoder::from(submessage)?;
-
-    // Actually dispatch a decoding process and get an iterator of decoded values.
-    // There are various methods available for compressing GRIB2 data, but some are
-    // not yet supported by this library and may return errors.
-    let values_iterator = decoder.dispatch()?;
-
-    // extract values from iterator
-    let values = values_iterator.collect();
-
-    Ok((grid, values))
-}
-
-pub(crate) fn get_lat_lon_and_values(
-    byte_string: &[u8],
-    message_index: (usize, usize),
-) -> Result<(Vec<f32>, Vec<f32>, Vec<f32>), GribViewerError> {
-    // Parse the GRIB2 message.
-    let grib2 = grib::from_bytes(byte_string)?;
-
-    // Find the target submessage.
-    let (_index, submessage) = grib2
-        .iter()
-        .find(|(index, _)| *index == message_index)
-        .ok_or_else(|| {
-            GribViewerError::MessageNotFound(format!(
-                "Index {:?} not found in Grib file",
-                message_index
-            ))
-        })?;
-
-    // Obtain latitude-longitude locations as an iterator.
-    let latlons = submessage.latlons()?;
-
-    // create array with lats and lons
-    let (lats, lons): (Vec<f32>, Vec<f32>) = latlons.unzip();
-
-    // Prepare a decoder.
-    let decoder = grib::Grib2SubmessageDecoder::from(submessage)?;
-
-    // Actually dispatch a decoding process and get an iterator of decoded values.
-    // There are various methods available for compressing GRIB2 data, but some are
-    // not yet supported by this library and may return errors.
-    let values_iterator = decoder.dispatch()?;
-
-    // extract values from iterator
-    let values = values_iterator.collect();
-
-    Ok((lats, lons, values))
-}
-
-pub(crate) fn grib_parameter_from_key(key: &str) -> Result<(u8, u8, u8), GribViewerError> {
-    let parts: Vec<&str> = key.split('_').collect();
-    if parts.len() != 4 || parts[0] != "grib2" {
-        return Err(GribViewerError::InvalidKey(
-            "invalid key format, expected 'grib2_<discipline>_<category>_<parameter>'".to_string(),
-        ));
-    }
-    let discipline: u8 = parts[1]
-        .parse()
-        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse discipline: {}", e)))?;
-    let category: u8 = parts[2]
-        .parse()
-        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse category: {}", e)))?;
-    let parameter: u8 = parts[3]
-        .parse()
-        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse parameter: {}", e)))?;
-    Ok((discipline, category, parameter))
-}
-
-pub(crate) fn fixed_surfaces_from_key(
-    key: &str,
-) -> Result<(FixedSurface, FixedSurface), GribViewerError> {
-    let parts: Vec<&str> = key.split('_').collect();
-    if parts.len() != 7 || parts[0] != "surface" {
-        return Err(GribViewerError::InvalidKey(
-            "invalid key format, expected 'surface_<t1>_<f1>_<v1>_<t2>_<f2>_<v2>'".to_string(),
-        ));
-    }
-    let surface_type1: u8 = parts[1]
-        .parse()
-        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse surface_type: {}", e)))?;
-    let scale_factor1: i8 = parts[2]
-        .parse()
-        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse scale_factor: {}", e)))?;
-    let scaled_value1: i32 = parts[3]
-        .parse()
-        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse scaled_value: {}", e)))?;
-    let surface_type2: u8 = parts[4]
-        .parse()
-        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse surface_type: {}", e)))?;
-    let scale_factor2: i8 = parts[5]
-        .parse()
-        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse scale_factor: {}", e)))?;
-    let scaled_value2: i32 = parts[6]
-        .parse()
-        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse scaled_value: {}", e)))?;
-
-    Ok((
-        FixedSurface {
-            surface_type: surface_type1,
-            scale_factor: scale_factor1,
-            scaled_value: scaled_value1,
-        },
-        FixedSurface {
-            surface_type: surface_type2,
-            scale_factor: scale_factor2,
-            scaled_value: scaled_value2,
-        },
-    ))
-}
-
-// TODO: turn this into function find_grib_submessage
-pub(crate) fn find_grib_index(
-    bytes: &[u8],
+pub(crate) fn get_message<'a, R: Read>(
+    grib: &'a Grib2<R>,
     discipline: u8,
     category: u8,
     parameter: u8,
     surface1: &FixedSurface,
     surface2: &FixedSurface,
     time: i64,
-) -> Result<(usize, usize), GribViewerError> {
-    let grib2 = grib::from_bytes(bytes)?;
-    for ((index, subindex), message) in grib2.iter() {
+) -> Result<SubMessage<'a, R>, GribViewerError> {
+    for (index, message) in grib.iter() {
         let d = message.indicator().discipline;
         let prod_def = message.prod_def();
         let Some(c) = prod_def.parameter_category() else {
@@ -273,13 +141,58 @@ pub(crate) fn find_grib_index(
             && s1 == *surface1
             && s2 == *surface2
         {
-            return Ok((index, subindex));
+            return Ok(message);
         }
     }
     Err(GribViewerError::MessageNotFound(format!(
         "No message with: disc: {}, cat: {}, param: {}, time: {}",
         discipline, category, parameter, time
     )))
+}
+
+// ==== Extract information from message ====
+
+pub(crate) fn get_grid_and_values<R: Grib2Read>(
+    submessage: SubMessage<'_, R>,
+) -> Result<(GridDefinitionTemplateValues, Vec<f32>), GribViewerError> {
+    let grid_def = submessage.grid_def();
+    let grid = GridDefinitionTemplateValues::try_from(grid_def)?;
+
+    // Prepare a decoder.
+    let decoder = grib::Grib2SubmessageDecoder::from(submessage)?;
+
+    // Actually dispatch a decoding process and get an iterator of decoded values.
+    // There are various methods available for compressing GRIB2 data, but some are
+    // not yet supported by this library and may return errors.
+    let values_iterator = decoder.dispatch()?;
+
+    // extract values from iterator
+    let values = values_iterator.collect();
+
+    Ok((grid, values))
+}
+
+pub(crate) fn get_lat_lon_and_values<R: Grib2Read>(
+    submessage: SubMessage<'_, R>,
+) -> Result<(Vec<f32>, Vec<f32>, Vec<f32>), GribViewerError> {
+    // Obtain latitude-longitude locations as an iterator.
+    let latlons = submessage.latlons()?;
+
+    // create array with lats and lons
+    let (lats, lons): (Vec<f32>, Vec<f32>) = latlons.unzip();
+
+    // Prepare a decoder.
+    let decoder = grib::Grib2SubmessageDecoder::from(submessage)?;
+
+    // Actually dispatch a decoding process and get an iterator of decoded values.
+    // There are various methods available for compressing GRIB2 data, but some are
+    // not yet supported by this library and may return errors.
+    let values_iterator = decoder.dispatch()?;
+
+    // extract values from iterator
+    let values = values_iterator.collect();
+
+    Ok((lats, lons, values))
 }
 
 /// For regular grids: get the occuring lats and longs from lowest to highest.
@@ -342,6 +255,69 @@ pub(crate) fn get_lat_lon_1d_without_jump(
         }
     }
     return Ok((lat, lon));
+}
+
+// ==== formatting and conversion of keys ====
+
+pub(crate) fn grib_parameter_from_key(key: &str) -> Result<(u8, u8, u8), GribViewerError> {
+    let parts: Vec<&str> = key.split('_').collect();
+    if parts.len() != 4 || parts[0] != "grib2" {
+        return Err(GribViewerError::InvalidKey(
+            "invalid key format, expected 'grib2_<discipline>_<category>_<parameter>'".to_string(),
+        ));
+    }
+    let discipline: u8 = parts[1]
+        .parse()
+        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse discipline: {}", e)))?;
+    let category: u8 = parts[2]
+        .parse()
+        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse category: {}", e)))?;
+    let parameter: u8 = parts[3]
+        .parse()
+        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse parameter: {}", e)))?;
+    Ok((discipline, category, parameter))
+}
+
+pub(crate) fn fixed_surfaces_from_key(
+    key: &str,
+) -> Result<(FixedSurface, FixedSurface), GribViewerError> {
+    let parts: Vec<&str> = key.split('_').collect();
+    if parts.len() != 7 || parts[0] != "surface" {
+        return Err(GribViewerError::InvalidKey(
+            "invalid key format, expected 'surface_<t1>_<f1>_<v1>_<t2>_<f2>_<v2>'".to_string(),
+        ));
+    }
+    let surface_type1: u8 = parts[1]
+        .parse()
+        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse surface_type: {}", e)))?;
+    let scale_factor1: i8 = parts[2]
+        .parse()
+        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse scale_factor: {}", e)))?;
+    let scaled_value1: i32 = parts[3]
+        .parse()
+        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse scaled_value: {}", e)))?;
+    let surface_type2: u8 = parts[4]
+        .parse()
+        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse surface_type: {}", e)))?;
+    let scale_factor2: i8 = parts[5]
+        .parse()
+        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse scale_factor: {}", e)))?;
+    let scaled_value2: i32 = parts[6]
+        .parse()
+        .map_err(|e| GribViewerError::InvalidKey(format!("Failed to parse scaled_value: {}", e)))?;
+
+    Ok((
+        FixedSurface {
+            surface_type: surface_type1,
+            scale_factor: scale_factor1,
+            scaled_value: scaled_value1,
+        },
+        FixedSurface {
+            surface_type: surface_type2,
+            scale_factor: scale_factor2,
+            scaled_value: scaled_value2,
+        },
+    ))
 }
 
 pub(crate) fn format_surfaces(surface1: &FixedSurface, surface2: &FixedSurface) -> String {

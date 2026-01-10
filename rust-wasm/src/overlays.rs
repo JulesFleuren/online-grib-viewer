@@ -47,7 +47,7 @@ pub(crate) struct SvgOverlay {
     pub max_zoom_level: i64,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ImageOverlay {
     pub image: Vec<u8>,
