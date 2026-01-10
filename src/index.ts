@@ -21,8 +21,6 @@ import {
   OverlaySettingsManager,
 } from "./overlaySettings.js";
 
-// certain parameter pairs are known to be vector fields
-
 let map: L.Map | null = null;
 let gribOverlayManager: GribOverlayManager | null = null;
 let selectedTime: bigint = 0n;
@@ -130,7 +128,6 @@ async function loadFile(file: File) {
       // skip the first because that is the empty option, skip the second, because that is the
       // magnitudeVectorField option, which should be disabled when this else clause is reached
       heatmapSelect.value = heatmapSelect.options[2].value;
-      // updateHeatmapSurfaceSelect();
     } else {
       // No grib messages found
       heatmapSelect.value = heatmapSelect.options[0].value;
