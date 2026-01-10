@@ -179,49 +179,52 @@ impl GribViewer {
 
         Ok(js_times)
     }
-}
 
-#[wasm_bindgen]
-pub fn query_grib_message_at_point(
-    bytes: &[u8],
-    parameter_key: &str,
-    surface_key: &str,
-    time: i64,
-    query_lat: f32,
-    query_lon: f32,
-) -> Result<JsValue, JsValue> {
-    let (discipline, category, parameter) = grib_parameter_from_key(parameter_key)?;
-    let (surface1, surface2) = fixed_surfaces_from_key(surface_key)?;
+    pub fn query_grib_message_at_point(
+        &self,
+        parameter_key: &str,
+        surface_key: &str,
+        time: i64,
+        query_lat: f32,
+        query_lon: f32,
+    ) -> Result<JsValue, JsValue> {
+        let (discipline, category, parameter) = grib_parameter_from_key(parameter_key)?;
+        let (surface1, surface2) = fixed_surfaces_from_key(surface_key)?;
 
-    let grib2 = grib::from_bytes(bytes).map_err(|e| JsValue::from(GribViewerError::from(e)))?;
+        let message = get_message(
+            &self.grib2,
+            discipline,
+            category,
+            parameter,
+            &surface1,
+            &surface2,
+            time,
+        )?;
+        let (lat, lon, values) = get_lat_lon_and_values(message)?;
 
-    let message = get_message(
-        &grib2, discipline, category, parameter, &surface1, &surface2, time,
-    )?;
-    let (lat, lon, values) = get_lat_lon_and_values(message)?;
+        let nearest_point_index = find_closest_point_in_grid(&lat, &lon, query_lat, query_lon);
 
-    let nearest_point_index = find_closest_point_in_grid(&lat, &lon, query_lat, query_lon);
-
-    let return_value = js_sys::Object::new();
-    js_sys::Reflect::set(
-        &return_value,
-        &JsValue::from_str("lat"),
-        &JsValue::from(lat[nearest_point_index]),
-    )
-    .expect("failed to set lat");
-    js_sys::Reflect::set(
-        &return_value,
-        &JsValue::from_str("lon"),
-        &JsValue::from(lon[nearest_point_index]),
-    )
-    .expect("failed to set lon");
-    js_sys::Reflect::set(
-        &return_value,
-        &JsValue::from_str("value"),
-        &JsValue::from(values[nearest_point_index]),
-    )
-    .expect("failed to set value");
-    Ok(JsValue::from(return_value))
+        let return_value = js_sys::Object::new();
+        js_sys::Reflect::set(
+            &return_value,
+            &JsValue::from_str("lat"),
+            &JsValue::from(lat[nearest_point_index]),
+        )
+        .expect("failed to set lat");
+        js_sys::Reflect::set(
+            &return_value,
+            &JsValue::from_str("lon"),
+            &JsValue::from(lon[nearest_point_index]),
+        )
+        .expect("failed to set lon");
+        js_sys::Reflect::set(
+            &return_value,
+            &JsValue::from_str("value"),
+            &JsValue::from(values[nearest_point_index]),
+        )
+        .expect("failed to set value");
+        Ok(JsValue::from(return_value))
+    }
 }
 
 #[wasm_bindgen]

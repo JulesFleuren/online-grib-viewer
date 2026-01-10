@@ -2,11 +2,6 @@ import L from "leaflet";
 import "leaflet.fullscreen";
 import { leafletLayer } from "protomaps-leaflet";
 import init, {
-  // get_available_parameters,
-  GribViewer,
-  // get_available_surfaces,
-  // get_available_timestamps,
-  query_grib_message_at_point,
   get_message_info,
   get_message_dump,
 } from "../pkg/online_grib_viewer.js";
@@ -459,16 +454,14 @@ function popupClosestGridPoint(lat: number, lon: number) {
       .split(",");
     const parameterName =
       vectorFieldSelect.options[vectorFieldSelect.selectedIndex].textContent;
-    const u_data = query_grib_message_at_point(
-      gribOverlayManager.gribBytes,
+    const u_data = gribOverlayManager.gribViewer.query_grib_message_at_point(
       u_key,
       selectedVFSurface,
       BigInt(selectedTime),
       lat,
       lon,
     );
-    const v_data = query_grib_message_at_point(
-      gribOverlayManager.gribBytes,
+    const v_data = gribOverlayManager.gribViewer.query_grib_message_at_point(
       v_key,
       selectedVFSurface,
       BigInt(selectedTime),
@@ -492,8 +485,7 @@ function popupClosestGridPoint(lat: number, lon: number) {
     selectedHeatMapParameter != "None" &&
     selectedHeatMapParameter != "magnitudeVectorField"
   ) {
-    const data = query_grib_message_at_point(
-      gribOverlayManager.gribBytes,
+    const data = gribOverlayManager.gribViewer.query_grib_message_at_point(
       selectedHeatMapParameter,
       selectedHMSurface,
       BigInt(selectedTime),
