@@ -4,7 +4,6 @@ import { GribKey } from "./gribKey.js";
 import { OverlaySettingsManager } from "./overlaySettings.js";
 import {
   GribViewer,
-  vector_field_overlay,
   heatmap_overlay,
   magnitude_heatmap_overlay,
 } from "../pkg/online_grib_viewer.js";
@@ -94,8 +93,7 @@ class GribOverlayManager {
 
     // generate wind barb overlay
     let zoomLevel = this.map.getZoom();
-    let svgOverlay = vector_field_overlay(
-      this.gribBytes,
+    let svgOverlay = this.gribViewer.vector_field_overlay(
       parameterKey.firstComponent,
       parameterKey.secondComponent!,
       surfaceKey,
@@ -119,8 +117,7 @@ class GribOverlayManager {
 
     if (zoomLevel < minZoomLevel) {
       zoomLevel = minZoomLevel;
-      svgOverlay = vector_field_overlay(
-        this.gribBytes,
+      svgOverlay = this.gribViewer.vector_field_overlay(
         parameterKey.firstComponent,
         parameterKey.secondComponent!,
         surfaceKey,
@@ -160,8 +157,7 @@ class GribOverlayManager {
       if (zl == zoomLevel) {
         continue;
       }
-      const svgOverlay = vector_field_overlay(
-        this.gribBytes,
+      const svgOverlay = this.gribViewer.vector_field_overlay(
         parameterKey.firstComponent,
         parameterKey.secondComponent!,
         surfaceKey,

@@ -260,47 +260,56 @@ impl GribViewer {
 
         Ok(JsValue::from(result))
     }
-}
 
-#[wasm_bindgen]
-pub fn vector_field_overlay(
-    bytes: &[u8],
-    param_key_u: &str,
-    param_key_v: &str,
-    surface_key: &str,
-    time: i64,
-    zoom_level: i64,
-    settings: JsValue,
-) -> Result<JsValue, JsValue> {
-    let settings = serde_wasm_bindgen::from_value(settings)
-        .map_err(|e| GribViewerError::Other(format!("Error deserializing settings: {}", e)))?;
+    pub fn vector_field_overlay(
+        &self,
+        param_key_u: &str,
+        param_key_v: &str,
+        surface_key: &str,
+        time: i64,
+        zoom_level: i64,
+        settings: JsValue,
+    ) -> Result<JsValue, JsValue> {
+        let settings = serde_wasm_bindgen::from_value(settings)
+            .map_err(|e| GribViewerError::Other(format!("Error deserializing settings: {}", e)))?;
 
-    let (surface1, surface2) = fixed_surfaces_from_key(surface_key)?;
+        let (surface1, surface2) = fixed_surfaces_from_key(surface_key)?;
 
-    let grib2 = grib::from_bytes(bytes).map_err(|e| JsValue::from(GribViewerError::from(e)))?;
+        let param_u = grib_parameter_from_key(param_key_u)?;
+        // This structure is to prevent a panic about reborrowing. In this way message_u lives as short as possible
+        let (grid, u) = {
+            let message_u = get_message(
+                &self.grib2,
+                param_u.0,
+                param_u.1,
+                param_u.2,
+                &surface1,
+                &surface2,
+                time,
+            )?;
+            get_grid_and_values(message_u)?
+        };
 
-    let param_u = grib_parameter_from_key(param_key_u)?;
-    // This structure is to prevent a panic about reborrowing. In this way message_u lives as short as possible
-    let (grid, u) = {
-        let message_u = get_message(
-            &grib2, param_u.0, param_u.1, param_u.2, &surface1, &surface2, time,
-        )?;
-        get_grid_and_values(message_u)?
-    };
+        // it is assumed that u and v have the same grid
+        // TODO: should this be checked?
+        let param_v = grib_parameter_from_key(param_key_v)?;
+        let (_grid, v) = {
+            let message_v = get_message(
+                &self.grib2,
+                param_v.0,
+                param_v.1,
+                param_v.2,
+                &surface1,
+                &surface2,
+                time,
+            )?;
+            get_grid_and_values(message_v)?
+        };
 
-    // it is assumed that u and v have the same grid
-    // TODO: should this be checked?
-    let param_v = grib_parameter_from_key(param_key_v)?;
-    let (_grid, v) = {
-        let message_v = get_message(
-            &grib2, param_v.0, param_v.1, param_v.2, &surface1, &surface2, time,
-        )?;
-        get_grid_and_values(message_v)?
-    };
+        let svg_overlay = generate_vector_field_svg_overlay(&grid, u, v, zoom_level, settings)?;
 
-    let svg_overlay = generate_vector_field_svg_overlay(&grid, u, v, zoom_level, settings)?;
-
-    Ok(serde_wasm_bindgen::to_value(&svg_overlay)?)
+        Ok(serde_wasm_bindgen::to_value(&svg_overlay)?)
+    }
 }
 
 #[wasm_bindgen]
