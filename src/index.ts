@@ -5,7 +5,7 @@ import init, {
   // get_available_parameters,
   GribViewer,
   // get_available_surfaces,
-  get_available_timestamps,
+  // get_available_timestamps,
   query_grib_message_at_point,
   get_message_info,
   get_message_dump,
@@ -277,13 +277,11 @@ function updateTimeSelect() {
   if (selectedVFParameter !== "None") {
     var selectedParameter = new GribKey(selectedVFParameter);
     // Vector field
-    var timesU = get_available_timestamps(
-      gribOverlayManager.gribBytes,
+    var timesU = gribOverlayManager.gribViewer.get_available_timestamps(
       selectedParameter.firstComponent,
       selectedVFSurface,
     );
-    var timesV = get_available_timestamps(
-      gribOverlayManager.gribBytes,
+    var timesV = gribOverlayManager.gribViewer.get_available_timestamps(
       selectedParameter.secondComponent!,
       selectedVFSurface,
     );
@@ -292,8 +290,7 @@ function updateTimeSelect() {
   } else if (selectedHMParameter !== "None") {
     var selectedParameter = new GribKey(selectedHMParameter);
     // Scalar field
-    availableTimes = get_available_timestamps(
-      gribOverlayManager.gribBytes,
+    availableTimes = gribOverlayManager.gribViewer.get_available_timestamps(
       selectedParameter.firstComponent,
       selectedHMSurface,
     );

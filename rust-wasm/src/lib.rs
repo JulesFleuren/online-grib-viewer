@@ -142,41 +142,43 @@ impl GribViewer {
         }
         Ok(js_surfaces)
     }
-}
 
-#[wasm_bindgen]
-pub fn get_available_timestamps(
-    bytes: &[u8],
-    parameter_key: &str,
-    surface_key: &str,
-) -> Result<Vec<JsValue>, JsValue> {
-    let grib2 = grib::from_bytes(bytes).map_err(|e| GribViewerError::from(e))?;
+    pub fn get_available_timestamps(
+        &self,
+        parameter_key: &str,
+        surface_key: &str,
+    ) -> Result<Vec<JsValue>, JsValue> {
+        let mut times: HashSet<i64> = HashSet::new();
+        let (discipline, category, parameter) = grib_parameter_from_key(parameter_key)?;
+        let (surface1, surface2) = fixed_surfaces_from_key(surface_key)?;
 
-    let mut times: HashSet<i64> = HashSet::new();
-    let (discipline, category, parameter) = grib_parameter_from_key(parameter_key)?;
-    let (surface1, surface2) = fixed_surfaces_from_key(surface_key)?;
-
-    for (index, message) in iter_messages_of_parameter_and_surface(
-        &grib2, discipline, category, parameter, surface1, surface2,
-    ) {
-        let temporal_info = grib::TemporalInfo::from(&message.temporal_raw_info());
-        if let Some(forecast_time) = temporal_info.forecast_time_target {
-            times.insert(forecast_time.timestamp());
-        } else {
-            warn!(
-                "Message with invalid forecast time, skipping message {:?}",
-                index
-            );
-            continue;
+        for (index, message) in iter_messages_of_parameter_and_surface(
+            &self.grib2,
+            discipline,
+            category,
+            parameter,
+            surface1,
+            surface2,
+        ) {
+            let temporal_info = grib::TemporalInfo::from(&message.temporal_raw_info());
+            if let Some(forecast_time) = temporal_info.forecast_time_target {
+                times.insert(forecast_time.timestamp());
+            } else {
+                warn!(
+                    "Message with invalid forecast time, skipping message {:?}",
+                    index
+                );
+                continue;
+            }
         }
+
+        let mut sorted_times: Vec<i64> = times.into_iter().collect();
+        sorted_times.sort();
+
+        let js_times: Vec<JsValue> = sorted_times.into_iter().map(JsValue::from).collect();
+
+        Ok(js_times)
     }
-
-    let mut sorted_times: Vec<i64> = times.into_iter().collect();
-    sorted_times.sort();
-
-    let js_times: Vec<JsValue> = sorted_times.into_iter().map(JsValue::from).collect();
-
-    Ok(js_times)
 }
 
 #[wasm_bindgen]
