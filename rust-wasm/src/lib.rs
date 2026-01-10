@@ -40,7 +40,7 @@ impl GribViewer {
         Ok(Self { grib2 })
     }
 
-    pub fn get_available_parameters(self) -> Result<Vec<JsValue>, JsValue> {
+    pub fn get_available_parameters(&self) -> Result<Vec<JsValue>, JsValue> {
         let mut parameters: HashMap<String, (u8, u8, u8)> = HashMap::new();
         for (_, message) in self.grib2.iter() {
             let discipline = message.indicator().discipline;
