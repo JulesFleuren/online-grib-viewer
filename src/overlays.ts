@@ -4,7 +4,6 @@ import { GribKey } from "./gribKey.js";
 import { OverlaySettingsManager } from "./overlaySettings.js";
 import {
   GribViewer,
-  heatmap_overlay,
   magnitude_heatmap_overlay,
 } from "../pkg/online_grib_viewer.js";
 import { createColorBar, ColorbarControl } from "./colorbarControl.js";
@@ -205,8 +204,7 @@ class GribOverlayManager {
         heatmapSettings,
       );
     } else {
-      wasmOverlay = heatmap_overlay(
-        this.gribBytes,
+      wasmOverlay = this.gribViewer.heatmap_overlay(
         parameterKey.firstComponent,
         surfaceKey,
         time,

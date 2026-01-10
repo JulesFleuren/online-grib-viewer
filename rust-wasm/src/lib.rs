@@ -310,36 +310,39 @@ impl GribViewer {
 
         Ok(serde_wasm_bindgen::to_value(&svg_overlay)?)
     }
-}
 
-#[wasm_bindgen]
-pub fn heatmap_overlay(
-    bytes: &[u8],
-    param_key: &str,
-    surface_key: &str,
-    time: i64,
-    settings: JsValue,
-) -> Result<JsValue, JsValue> {
-    let settings = serde_wasm_bindgen::from_value(settings)
-        .map_err(|e| GribViewerError::Other(format!("Error deserializing settings: {}", e)))?;
+    pub fn heatmap_overlay(
+        &self,
+        param_key: &str,
+        surface_key: &str,
+        time: i64,
+        settings: JsValue,
+    ) -> Result<JsValue, JsValue> {
+        let settings = serde_wasm_bindgen::from_value(settings)
+            .map_err(|e| GribViewerError::Other(format!("Error deserializing settings: {}", e)))?;
 
-    let (discipline, category, parameter) = grib_parameter_from_key(param_key)?;
-    let (surface1, surface2) = fixed_surfaces_from_key(surface_key)?;
+        let (discipline, category, parameter) = grib_parameter_from_key(param_key)?;
+        let (surface1, surface2) = fixed_surfaces_from_key(surface_key)?;
 
-    let grib2 = grib::from_bytes(bytes).map_err(|e| JsValue::from(GribViewerError::from(e)))?;
+        // This structure is to prevent a panic about reborrowing. In this way message lives as short as possible
+        let (grid, values) = {
+            let message = get_message(
+                &self.grib2,
+                discipline,
+                category,
+                parameter,
+                &surface1,
+                &surface2,
+                time,
+            )?;
 
-    // This structure is to prevent a panic about reborrowing. In this way message lives as short as possible
-    let (grid, values) = {
-        let message = get_message(
-            &grib2, discipline, category, parameter, &surface1, &surface2, time,
-        )?;
+            get_grid_and_values(message)?
+        };
 
-        get_grid_and_values(message)?
-    };
+        let image_overlay = generate_heatmap_overlay(&grid, values, settings)?;
 
-    let image_overlay = generate_heatmap_overlay(&grid, values, settings)?;
-
-    Ok(serde_wasm_bindgen::to_value(&image_overlay)?)
+        Ok(serde_wasm_bindgen::to_value(&image_overlay)?)
+    }
 }
 
 #[wasm_bindgen]
