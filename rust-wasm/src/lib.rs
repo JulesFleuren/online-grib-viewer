@@ -343,48 +343,57 @@ impl GribViewer {
 
         Ok(serde_wasm_bindgen::to_value(&image_overlay)?)
     }
-}
 
-#[wasm_bindgen]
-pub fn magnitude_heatmap_overlay(
-    bytes: &[u8],
-    param_key_u: &str,
-    param_key_v: &str,
-    surface_key: &str,
-    time: i64,
-    heatmap_overlay_settings: JsValue,
-) -> Result<JsValue, JsValue> {
-    let heatmap_overlay_settings = serde_wasm_bindgen::from_value(heatmap_overlay_settings)
-        .map_err(|e| GribViewerError::Other(format!("Error deserializing settings: {}", e)))?;
+    pub fn magnitude_heatmap_overlay(
+        &self,
+        param_key_u: &str,
+        param_key_v: &str,
+        surface_key: &str,
+        time: i64,
+        heatmap_overlay_settings: JsValue,
+    ) -> Result<JsValue, JsValue> {
+        let heatmap_overlay_settings = serde_wasm_bindgen::from_value(heatmap_overlay_settings)
+            .map_err(|e| GribViewerError::Other(format!("Error deserializing settings: {}", e)))?;
 
-    let (surface1, surface2) = fixed_surfaces_from_key(surface_key)?;
+        let (surface1, surface2) = fixed_surfaces_from_key(surface_key)?;
 
-    let grib2 = grib::from_bytes(bytes).map_err(|e| JsValue::from(GribViewerError::from(e)))?;
+        let param_u = grib_parameter_from_key(param_key_u)?;
+        // This structure is to prevent a panic about reborrowing. In this way message_u lives as short as possible
+        let (grid, u) = {
+            let message_u = get_message(
+                &self.grib2,
+                param_u.0,
+                param_u.1,
+                param_u.2,
+                &surface1,
+                &surface2,
+                time,
+            )?;
+            get_grid_and_values(message_u)?
+        };
 
-    let param_u = grib_parameter_from_key(param_key_u)?;
-    // This structure is to prevent a panic about reborrowing. In this way message_u lives as short as possible
-    let (grid, u) = {
-        let message_u = get_message(
-            &grib2, param_u.0, param_u.1, param_u.2, &surface1, &surface2, time,
-        )?;
-        get_grid_and_values(message_u)?
-    };
+        // it is assumed that u and v have the same grid
+        // TODO: should this be checked?
+        let param_v = grib_parameter_from_key(param_key_v)?;
+        let (_grid, v) = {
+            let message_v = get_message(
+                &self.grib2,
+                param_v.0,
+                param_v.1,
+                param_v.2,
+                &surface1,
+                &surface2,
+                time,
+            )?;
+            get_grid_and_values(message_v)?
+        };
 
-    // it is assumed that u and v have the same grid
-    // TODO: should this be checked?
-    let param_v = grib_parameter_from_key(param_key_v)?;
-    let (_grid, v) = {
-        let message_v = get_message(
-            &grib2, param_v.0, param_v.1, param_v.2, &surface1, &surface2, time,
-        )?;
-        get_grid_and_values(message_v)?
-    };
+        let values = norm(&u, &v);
 
-    let values = norm(&u, &v);
+        let image_overlay = generate_heatmap_overlay(&grid, values, heatmap_overlay_settings)?;
 
-    let image_overlay = generate_heatmap_overlay(&grid, values, heatmap_overlay_settings)?;
-
-    Ok(serde_wasm_bindgen::to_value(&image_overlay)?)
+        Ok(serde_wasm_bindgen::to_value(&image_overlay)?)
+    }
 }
 
 /// Go through all grib messages with this key, and find the minimum and maximum occuring value.

@@ -2,10 +2,7 @@ import type { Map, LatLngBoundsExpression } from "leaflet";
 import L, { LatLngBounds } from "leaflet";
 import { GribKey } from "./gribKey.js";
 import { OverlaySettingsManager } from "./overlaySettings.js";
-import {
-  GribViewer,
-  magnitude_heatmap_overlay,
-} from "../pkg/online_grib_viewer.js";
+import { GribViewer } from "../pkg/online_grib_viewer.js";
 import { createColorBar, ColorbarControl } from "./colorbarControl.js";
 
 interface HeatMapLayer {
@@ -195,8 +192,7 @@ class GribOverlayManager {
       const u_key = parameterKey.firstComponent;
       const v_key = parameterKey.secondComponent!;
 
-      wasmOverlay = magnitude_heatmap_overlay(
-        this.gribBytes,
+      wasmOverlay = this.gribViewer.magnitude_heatmap_overlay(
         u_key,
         v_key,
         surfaceKey,
