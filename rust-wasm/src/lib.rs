@@ -225,38 +225,41 @@ impl GribViewer {
         .expect("failed to set value");
         Ok(JsValue::from(return_value))
     }
-}
 
-#[wasm_bindgen]
-pub fn get_scalar_field(
-    bytes: &[u8],
-    parameter_key: &str,
-    surface_key: &str,
-    time: i64,
-) -> Result<JsValue, JsValue> {
-    let (discipline, category, parameter) = grib_parameter_from_key(parameter_key)?;
-    let (surface1, surface2) = fixed_surfaces_from_key(surface_key)?;
+    pub fn get_scalar_field(
+        &self,
+        parameter_key: &str,
+        surface_key: &str,
+        time: i64,
+    ) -> Result<JsValue, JsValue> {
+        let (discipline, category, parameter) = grib_parameter_from_key(parameter_key)?;
+        let (surface1, surface2) = fixed_surfaces_from_key(surface_key)?;
 
-    let grib2 = grib::from_bytes(bytes).map_err(|e| JsValue::from(GribViewerError::from(e)))?;
+        let message = get_message(
+            &self.grib2,
+            discipline,
+            category,
+            parameter,
+            &surface1,
+            &surface2,
+            time,
+        )?;
 
-    let message = get_message(
-        &grib2, discipline, category, parameter, &surface1, &surface2, time,
-    )?;
+        let (lat, lon, values) = get_lat_lon_and_values(message)?;
+        // Convert Rust Vec<f32> to JS Float32Array
+        let lat = Float32Array::from(lat.as_slice());
+        let lon = Float32Array::from(lon.as_slice());
+        let values = Float32Array::from(values.as_slice());
 
-    let (lat, lon, values) = get_lat_lon_and_values(message)?;
-    // Convert Rust Vec<f32> to JS Float32Array
-    let lat = Float32Array::from(lat.as_slice());
-    let lon = Float32Array::from(lon.as_slice());
-    let values = Float32Array::from(values.as_slice());
+        // Create a JS object with the arrays
+        let result = js_sys::Object::new();
+        js_sys::Reflect::set(&result, &JsValue::from_str("lat"), &lat).expect("failed to set lat");
+        js_sys::Reflect::set(&result, &JsValue::from_str("lon"), &lon).expect("failed to set lon");
+        js_sys::Reflect::set(&result, &JsValue::from_str("values"), &values)
+            .expect("failed to set values");
 
-    // Create a JS object with the arrays
-    let result = js_sys::Object::new();
-    js_sys::Reflect::set(&result, &JsValue::from_str("lat"), &lat).expect("failed to set lat");
-    js_sys::Reflect::set(&result, &JsValue::from_str("lon"), &lon).expect("failed to set lon");
-    js_sys::Reflect::set(&result, &JsValue::from_str("values"), &values)
-        .expect("failed to set values");
-
-    Ok(JsValue::from(result))
+        Ok(JsValue::from(result))
+    }
 }
 
 #[wasm_bindgen]
