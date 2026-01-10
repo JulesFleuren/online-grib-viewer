@@ -1,9 +1,11 @@
 use console_error_panic_hook;
 use grib::codetables::{CodeTable4_2, Lookup};
+use grib::{Grib2, SeekableGrib2Reader};
 use js_sys::Float32Array;
 use log::warn;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::io::Cursor;
 use std::iter::zip;
 use wasm_bindgen::prelude::*;
 
@@ -23,6 +25,68 @@ pub mod windbarbs;
 pub fn init() {
     console_error_panic_hook::set_once();
     console_log::init_with_level(log::Level::Debug).expect("failed to initialize logging");
+}
+
+#[wasm_bindgen]
+pub struct GribViewer {
+    grib2: Grib2<SeekableGrib2Reader<Cursor<Vec<u8>>>>,
+}
+
+#[wasm_bindgen]
+impl GribViewer {
+    #[wasm_bindgen(constructor)]
+    pub fn new(bytes: Vec<u8>) -> Result<GribViewer, JsValue> {
+        let grib2 = grib::from_bytes(bytes).map_err(|e| GribViewerError::from(e))?;
+        Ok(Self { grib2 })
+    }
+
+    pub fn get_available_parameters(self) -> Result<Vec<JsValue>, JsValue> {
+        let mut parameters: HashMap<String, (u8, u8, u8)> = HashMap::new();
+        for (_, message) in self.grib2.iter() {
+            let discipline = message.indicator().discipline;
+            let prod_def = message.prod_def();
+            let Some(category) = prod_def.parameter_category() else {
+                warn!(
+                    "Unsupported product definition template number: {}, skipping message",
+                    prod_def.prod_tmpl_num()
+                );
+                continue;
+            };
+            let parameter = prod_def
+                .parameter_number()
+                .expect("parameter_category() should have failed");
+
+            let parameter_name =
+                CodeTable4_2::new(discipline, category).lookup(usize::from(parameter));
+
+            // insert parameter if it is not already present
+            parameters
+                .entry(parameter_name.to_string())
+                .or_insert((discipline, category, parameter));
+        }
+
+        let mut js_parameters: Vec<JsValue> = Vec::new();
+        for (parameter_name, (discipline_number, category_number, parameter_number)) in parameters {
+            let parameter = js_sys::Object::new();
+            js_sys::Reflect::set(
+                &parameter,
+                &JsValue::from_str("name"),
+                &JsValue::from(parameter_name.to_string()),
+            )
+            .expect("failed to set name");
+            js_sys::Reflect::set(
+                &parameter,
+                &JsValue::from_str("key"),
+                &JsValue::from(format!(
+                    "grib2_{}_{}_{}",
+                    discipline_number, category_number, parameter_number
+                )),
+            )
+            .expect("failed to set key");
+            js_parameters.push(JsValue::from(parameter));
+        }
+        Ok(js_parameters)
+    }
 }
 
 #[wasm_bindgen]

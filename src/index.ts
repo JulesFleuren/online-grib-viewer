@@ -3,6 +3,7 @@ import "leaflet.fullscreen";
 import { leafletLayer } from "protomaps-leaflet";
 import init, {
   get_available_parameters,
+  GribViewer,
   get_available_surfaces,
   get_available_timestamps,
   query_grib_message_at_point,
@@ -55,9 +56,9 @@ async function loadFile(file: File) {
   vectorPairs = await loadPairs();
   gribOverlayManager = new GribOverlayManager(gribBytes, map!, overlaySettings);
 
-  const parameters = get_available_parameters(gribBytes);
+  const gribViewer = new GribViewer(gribBytes);
 
-  // console.log('Available parameters:', parameters);
+  const parameters = gribViewer.get_available_parameters();
 
   const vectorFieldSelect = document.getElementById(
     "vectorFieldParameterSelect",
