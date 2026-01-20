@@ -520,51 +520,58 @@ impl GribViewer {
         .expect("failed to set max");
         Ok(JsValue::from(result))
     }
-}
 
-#[wasm_bindgen]
-pub fn get_message_info(
-    bytes: &[u8],
-    parameter_key: &str,
-    surface_key: &str,
-    time: i64,
-) -> Result<JsValue, JsValue> {
-    let (discipline, category, parameter) = grib_parameter_from_key(parameter_key)?;
-    let (surface1, surface2) = fixed_surfaces_from_key(surface_key)?;
+    pub fn get_message_info(
+        &self,
+        parameter_key: &str,
+        surface_key: &str,
+        time: i64,
+    ) -> Result<JsValue, JsValue> {
+        let (discipline, category, parameter) = grib_parameter_from_key(parameter_key)?;
+        let (surface1, surface2) = fixed_surfaces_from_key(surface_key)?;
 
-    let grib2 = grib::from_bytes(bytes).map_err(|e| JsValue::from(GribViewerError::from(e)))?;
+        let message = get_message(
+            &self.grib2,
+            discipline,
+            category,
+            parameter,
+            &surface1,
+            &surface2,
+            time,
+        )?;
 
-    let message = get_message(
-        &grib2, discipline, category, parameter, &surface1, &surface2, time,
-    )?;
+        let output = message.describe();
+        Ok(JsValue::from(output))
+    }
 
-    let output = message.describe();
-    Ok(JsValue::from(output))
-}
+    #[wasm_bindgen]
+    pub fn get_message_dump(
+        &self,
+        parameter_key: &str,
+        surface_key: &str,
+        time: i64,
+    ) -> Result<JsValue, JsValue> {
+        let (discipline, category, parameter) = grib_parameter_from_key(parameter_key)?;
+        let (surface1, surface2) = fixed_surfaces_from_key(surface_key)?;
 
-#[wasm_bindgen]
-pub fn get_message_dump(
-    bytes: &[u8],
-    parameter_key: &str,
-    surface_key: &str,
-    time: i64,
-) -> Result<JsValue, JsValue> {
-    let (discipline, category, parameter) = grib_parameter_from_key(parameter_key)?;
-    let (surface1, surface2) = fixed_surfaces_from_key(surface_key)?;
+        let message = get_message(
+            &self.grib2,
+            discipline,
+            category,
+            parameter,
+            &surface1,
+            &surface2,
+            time,
+        )?;
 
-    let grib2 = grib::from_bytes(bytes).map_err(|e| JsValue::from(GribViewerError::from(e)))?;
+        let mut buffer = Vec::new();
 
-    let message = get_message(
-        &grib2, discipline, category, parameter, &surface1, &surface2, time,
-    )?;
+        message
+            .dump(&mut buffer)
+            .map_err(|e| GribViewerError::from(e))?;
 
-    let mut buffer = Vec::new();
-
-    message
-        .dump(&mut buffer)
-        .map_err(|e| GribViewerError::from(e))?;
-
-    Ok(JsValue::from(
-        String::from_utf8(buffer).map_err(|e| GribViewerError::Other(e.to_string()))?,
-    ))
+        Ok(JsValue::from(
+            String::from_utf8(buffer).map_err(|e| GribViewerError::Other(e.to_string()))?,
+        ))
+    }
 }

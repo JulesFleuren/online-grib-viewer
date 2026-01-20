@@ -1,10 +1,7 @@
 import L from "leaflet";
 import "leaflet.fullscreen";
 import { leafletLayer } from "protomaps-leaflet";
-import init, {
-  get_message_info,
-  get_message_dump,
-} from "../pkg/online_grib_viewer.js";
+import init from "../pkg/online_grib_viewer.js";
 import GribOverlayManager from "./overlays.js";
 import { GribKey } from "./gribKey.js";
 import {
@@ -680,8 +677,7 @@ init().then(() => {
       return;
     }
 
-    const content = get_message_info(
-      gribOverlayManager.gribBytes,
+    const content = gribOverlayManager.gribViewer.get_message_info(
       selectedHMParameter,
       selectedHMSurface,
       selectedTime!,
@@ -717,8 +713,7 @@ init().then(() => {
       return;
     }
 
-    const dump = get_message_dump(
-      gribOverlayManager.gribBytes,
+    const dump = gribOverlayManager.gribViewer.get_message_dump(
       selectedHMParameter,
       selectedHMSurface,
       selectedTime!,
