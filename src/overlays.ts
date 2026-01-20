@@ -48,6 +48,15 @@ class GribOverlayManager {
     this.colorbarControl = null;
   }
 
+  free() {
+    if (this.gribViewer) {
+      this.gribViewer.free(); // Free the Rust/WASM object
+    }
+    // Clean up other resources
+    this.clearHeatMap();
+    this.clearVectorField();
+  }
+
   clearHeatMap() {
     if (this.heatmapLayer) {
       this.map.removeLayer(this.heatmapLayer.overlay);

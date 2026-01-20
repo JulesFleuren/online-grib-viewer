@@ -45,7 +45,7 @@ async function loadFile(file: File) {
   if (gribOverlayManager) {
     gribOverlayManager.clearHeatMap();
     gribOverlayManager.clearVectorField();
-    // TODO: should gribOverlayManager.gribViewer.free() be called?
+    gribOverlayManager.free();
   }
 
   overlaySettings = await loadDefaultSettings(gribBytes);
