@@ -2,11 +2,7 @@ import type { Map, LatLngBoundsExpression } from "leaflet";
 import L, { LatLngBounds } from "leaflet";
 import { GribKey } from "./gribKey.js";
 import { OverlaySettingsManager } from "./overlaySettings.js";
-import {
-  vector_field_overlay,
-  heatmap_overlay,
-  magnitude_heatmap_overlay,
-} from "../pkg/online_grib_viewer.js";
+import { GribViewer } from "../pkg/online_grib_viewer.js";
 import { createColorBar, ColorbarControl } from "./colorbarControl.js";
 
 interface HeatMapLayer {
@@ -23,7 +19,8 @@ interface VectorFieldLayer {
   time: bigint;
 }
 
-class GribOverlay {
+class GribOverlayManager {
+  gribViewer: GribViewer;
   gribBytes: Uint8Array;
   map: Map;
   overlaySettingsManager: OverlaySettingsManager;
@@ -39,6 +36,7 @@ class GribOverlay {
     map: Map,
     overlaySettingsManger: OverlaySettingsManager,
   ) {
+    this.gribViewer = new GribViewer(gribBytes);
     this.gribBytes = gribBytes;
     this.map = map;
     this.overlaySettingsManager = overlaySettingsManger;
@@ -48,6 +46,15 @@ class GribOverlay {
     this.displayedZoomLevel = map.getZoom();
     this.overlayBounds = null;
     this.colorbarControl = null;
+  }
+
+  free() {
+    if (this.gribViewer) {
+      this.gribViewer.free(); // Free the Rust/WASM object
+    }
+    // Clean up other resources
+    this.clearHeatMap();
+    this.clearVectorField();
   }
 
   clearHeatMap() {
@@ -87,12 +94,14 @@ class GribOverlay {
     this.clearVectorField();
 
     const vectorFieldSettings =
-      this.overlaySettingsManager.getVectorFieldSettings(parameterKey);
+      this.overlaySettingsManager.getVectorFieldSettings(
+        this.gribViewer,
+        parameterKey,
+      );
 
     // generate wind barb overlay
     let zoomLevel = this.map.getZoom();
-    let svgOverlay = vector_field_overlay(
-      this.gribBytes,
+    let svgOverlay = this.gribViewer.vector_field_overlay(
       parameterKey.firstComponent,
       parameterKey.secondComponent!,
       surfaceKey,
@@ -116,8 +125,7 @@ class GribOverlay {
 
     if (zoomLevel < minZoomLevel) {
       zoomLevel = minZoomLevel;
-      svgOverlay = vector_field_overlay(
-        this.gribBytes,
+      svgOverlay = this.gribViewer.vector_field_overlay(
         parameterKey.firstComponent,
         parameterKey.secondComponent!,
         surfaceKey,
@@ -157,8 +165,7 @@ class GribOverlay {
       if (zl == zoomLevel) {
         continue;
       }
-      const svgOverlay = vector_field_overlay(
-        this.gribBytes,
+      const svgOverlay = this.gribViewer.vector_field_overlay(
         parameterKey.firstComponent,
         parameterKey.secondComponent!,
         surfaceKey,
@@ -190,15 +197,16 @@ class GribOverlay {
     let wasmOverlay;
     // let heatmapSettings;
 
-    const heatmapSettings =
-      this.overlaySettingsManager.getHeatmapSettings(parameterKey);
+    const heatmapSettings = this.overlaySettingsManager.getHeatmapSettings(
+      this.gribViewer,
+      parameterKey,
+    );
 
     if (parameterKey.isVectorField) {
       const u_key = parameterKey.firstComponent;
       const v_key = parameterKey.secondComponent!;
 
-      wasmOverlay = magnitude_heatmap_overlay(
-        this.gribBytes,
+      wasmOverlay = this.gribViewer.magnitude_heatmap_overlay(
         u_key,
         v_key,
         surfaceKey,
@@ -206,8 +214,7 @@ class GribOverlay {
         heatmapSettings,
       );
     } else {
-      wasmOverlay = heatmap_overlay(
-        this.gribBytes,
+      wasmOverlay = this.gribViewer.heatmap_overlay(
         parameterKey.firstComponent,
         surfaceKey,
         time,
@@ -328,4 +335,4 @@ class GribOverlay {
   }
 }
 
-export default GribOverlay;
+export default GribOverlayManager;

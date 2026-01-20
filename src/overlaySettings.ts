@@ -1,7 +1,4 @@
-import {
-  find_min_max_value,
-  find_min_max_magnitude,
-} from "../pkg/online_grib_viewer.js";
+import { GribViewer } from "../pkg/online_grib_viewer.js";
 type GribKey = import("./gribKey.js").GribKey;
 
 interface HeatMapOverlaySettings {
@@ -43,9 +40,14 @@ class OverlaySettingsManager {
   //
   // It returns a valid HeatMapOverlaySettings instance and updates this.settings with this valid instance,
   // so that FileBased min and max values do not have to be recalculated
-  getHeatmapSettings(key: GribKey): HeatMapOverlaySettings {
+  getHeatmapSettings(
+    gribViewer: Readonly<GribViewer>,
+    key: GribKey,
+  ): HeatMapOverlaySettings {
     let min_max;
     let result;
+
+    // see if settings for this key are already available in settings
     if (this.settings.hasOwnProperty(key.toString())) {
       result = this.settings[key.toString()];
     } else {
@@ -57,13 +59,12 @@ class OverlaySettingsManager {
       if (result["colorMin"] === "FileBased") {
         // FileBased: find minimum value of variable in whole file
         if (key.isVectorField) {
-          min_max = find_min_max_magnitude(
-            this.gribBytes,
+          min_max = gribViewer.find_min_max_magnitude(
             key.firstComponent,
             key.secondComponent!,
           );
         } else {
-          min_max = find_min_max_value(this.gribBytes, key.firstComponent);
+          min_max = gribViewer.find_min_max_value(key.firstComponent);
         }
         result["colorMin"] = min_max.min;
       } else if (result["colorMin"] === "MessageBased") {
@@ -82,7 +83,7 @@ class OverlaySettingsManager {
       }
     } else {
       // default: same as FileBased
-      min_max = find_min_max_value(this.gribBytes, key.firstComponent);
+      min_max = gribViewer.find_min_max_value(key.firstComponent);
       result["colorMin"] = min_max.min;
     }
 
@@ -91,13 +92,12 @@ class OverlaySettingsManager {
       if (result["colorMax"] === "FileBased") {
         // FileBased: find maximum value of variable in whole file
         if (key.isVectorField) {
-          min_max ??= find_min_max_magnitude(
-            this.gribBytes,
+          min_max ??= gribViewer.find_min_max_magnitude(
             key.firstComponent,
             key.secondComponent!,
           );
         } else {
-          min_max ??= find_min_max_value(this.gribBytes, key.firstComponent);
+          min_max ??= gribViewer.find_min_max_value(key.firstComponent);
         }
         result["colorMax"] = min_max.max;
       } else if (result["colorMax"] === "MessageBased") {
@@ -116,7 +116,7 @@ class OverlaySettingsManager {
       }
     } else {
       // default: same as FileBased
-      min_max ??= find_min_max_value(this.gribBytes, key.firstComponent);
+      min_max ??= gribViewer.find_min_max_value(key.firstComponent);
       result["colorMax"] = min_max.max;
     }
 
@@ -167,7 +167,10 @@ class OverlaySettingsManager {
   // //
   // It returns a valid VectorFieldOverlaySettings instance and updates this.settings with this valid instance,
   // so that FileBased min and max values do not have to be recalculated
-  getVectorFieldSettings(key: GribKey): VectorFieldOverlaySettings {
+  getVectorFieldSettings(
+    gribViewer: Readonly<GribViewer>,
+    key: GribKey,
+  ): VectorFieldOverlaySettings {
     if (!key.isVectorField) {
       throw new Error("Key is not a vector field");
     }
@@ -183,8 +186,7 @@ class OverlaySettingsManager {
     if (result.hasOwnProperty("scaleMax")) {
       if (result["scaleMax"] === "FileBased") {
         // FileBased: find minimum value of variable in whole file
-        min_max = find_min_max_magnitude(
-          this.gribBytes,
+        min_max = gribViewer.find_min_max_magnitude(
           key.firstComponent,
           key.secondComponent!,
         );
@@ -205,8 +207,7 @@ class OverlaySettingsManager {
       }
     } else {
       // default: same as FileBased
-      min_max = find_min_max_magnitude(
-        this.gribBytes,
+      min_max = gribViewer.find_min_max_magnitude(
         key.firstComponent,
         key.secondComponent!,
       );

@@ -1,14 +1,7 @@
 import L from "leaflet";
 import "leaflet.fullscreen";
 import { leafletLayer } from "protomaps-leaflet";
-import init, {
-  get_available_parameters,
-  get_available_surfaces,
-  get_available_timestamps,
-  query_grib_message_at_point,
-  get_message_info,
-  get_message_dump,
-} from "../pkg/online_grib_viewer.js";
+import init from "../pkg/online_grib_viewer.js";
 import GribOverlayManager from "./overlays.js";
 import { GribKey } from "./gribKey.js";
 import {
@@ -49,15 +42,14 @@ async function loadFile(file: File) {
   if (gribOverlayManager) {
     gribOverlayManager.clearHeatMap();
     gribOverlayManager.clearVectorField();
+    gribOverlayManager.free();
   }
 
   overlaySettings = await loadDefaultSettings(gribBytes);
   vectorPairs = await loadPairs();
   gribOverlayManager = new GribOverlayManager(gribBytes, map!, overlaySettings);
 
-  const parameters = get_available_parameters(gribBytes);
-
-  // console.log('Available parameters:', parameters);
+  const parameters = gribOverlayManager.gribViewer.get_available_parameters();
 
   const vectorFieldSelect = document.getElementById(
     "vectorFieldParameterSelect",
@@ -160,13 +152,11 @@ function updateVectorFieldSurfaceSelect() {
 
   const selectedParameter = new GribKey(selectedVFParameter);
 
-  var surfacesU = get_available_surfaces(
-    gribOverlayManager.gribBytes,
+  var surfacesU = gribOverlayManager.gribViewer.get_available_surfaces(
     selectedParameter.firstComponent,
   );
 
-  var surfacesV = get_available_surfaces(
-    gribOverlayManager.gribBytes,
+  var surfacesV = gribOverlayManager.gribViewer.get_available_surfaces(
     selectedParameter.secondComponent!,
   );
 
@@ -226,10 +216,10 @@ function updateHeatmapSurfaceSelect() {
 
   const selectedParameter = new GribKey(selectedHMParameter);
 
-  const availableSurfaces = get_available_surfaces(
-    gribOverlayManager.gribBytes,
-    selectedParameter.firstComponent,
-  );
+  const availableSurfaces =
+    gribOverlayManager.gribViewer.get_available_surfaces(
+      selectedParameter.firstComponent,
+    );
 
   if (availableSurfaces.length == 0) {
     throw new Error(
@@ -280,13 +270,11 @@ function updateTimeSelect() {
   if (selectedVFParameter !== "None") {
     var selectedParameter = new GribKey(selectedVFParameter);
     // Vector field
-    var timesU = get_available_timestamps(
-      gribOverlayManager.gribBytes,
+    var timesU = gribOverlayManager.gribViewer.get_available_timestamps(
       selectedParameter.firstComponent,
       selectedVFSurface,
     );
-    var timesV = get_available_timestamps(
-      gribOverlayManager.gribBytes,
+    var timesV = gribOverlayManager.gribViewer.get_available_timestamps(
       selectedParameter.secondComponent!,
       selectedVFSurface,
     );
@@ -295,8 +283,7 @@ function updateTimeSelect() {
   } else if (selectedHMParameter !== "None") {
     var selectedParameter = new GribKey(selectedHMParameter);
     // Scalar field
-    availableTimes = get_available_timestamps(
-      gribOverlayManager.gribBytes,
+    availableTimes = gribOverlayManager.gribViewer.get_available_timestamps(
       selectedParameter.firstComponent,
       selectedHMSurface,
     );
@@ -465,16 +452,14 @@ function popupClosestGridPoint(lat: number, lon: number) {
       .split(",");
     const parameterName =
       vectorFieldSelect.options[vectorFieldSelect.selectedIndex].textContent;
-    const u_data = query_grib_message_at_point(
-      gribOverlayManager.gribBytes,
+    const u_data = gribOverlayManager.gribViewer.query_grib_message_at_point(
       u_key,
       selectedVFSurface,
       BigInt(selectedTime),
       lat,
       lon,
     );
-    const v_data = query_grib_message_at_point(
-      gribOverlayManager.gribBytes,
+    const v_data = gribOverlayManager.gribViewer.query_grib_message_at_point(
       v_key,
       selectedVFSurface,
       BigInt(selectedTime),
@@ -498,8 +483,7 @@ function popupClosestGridPoint(lat: number, lon: number) {
     selectedHeatMapParameter != "None" &&
     selectedHeatMapParameter != "magnitudeVectorField"
   ) {
-    const data = query_grib_message_at_point(
-      gribOverlayManager.gribBytes,
+    const data = gribOverlayManager.gribViewer.query_grib_message_at_point(
       selectedHeatMapParameter,
       selectedHMSurface,
       BigInt(selectedTime),
@@ -693,8 +677,7 @@ init().then(() => {
       return;
     }
 
-    const content = get_message_info(
-      gribOverlayManager.gribBytes,
+    const content = gribOverlayManager.gribViewer.get_message_info(
       selectedHMParameter,
       selectedHMSurface,
       selectedTime!,
@@ -730,8 +713,7 @@ init().then(() => {
       return;
     }
 
-    const dump = get_message_dump(
-      gribOverlayManager.gribBytes,
+    const dump = gribOverlayManager.gribViewer.get_message_dump(
       selectedHMParameter,
       selectedHMSurface,
       selectedTime!,
