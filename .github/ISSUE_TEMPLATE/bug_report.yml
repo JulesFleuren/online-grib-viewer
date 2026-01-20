@@ -1,0 +1,130 @@
+name: 🐞 Bug report
+description: Report a bug or regression in Online-Grib-Viewer
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug! Please fill out the form below to help us reproduce and fix it.
+
+  - type: input
+    id: version
+    attributes:
+      label: App version / commit
+      description: Version, tag, or commit hash
+      placeholder: "v1.2.0 or main@abc123"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: browser
+    attributes:
+      label: Browser
+      options:
+        - Chrome
+        - Firefox
+        - Safari
+        - Edge
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: browser_version
+    attributes:
+      label: Browser version
+      placeholder: "e.g. Chrome 121.0"
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - macOS
+        - Windows
+        - Linux
+        - iOS
+        - Android
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the bug clearly and concisely.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Be as detailed as possible.
+      placeholder: |
+        1. Load GRIB file ...
+        2. Enable layer ...
+        3. Zoom to ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: other-viewers
+    attributes:
+      label: Behavior in other viewers
+      description: |
+        Have you tried opening the grib file in another Grib-viewer (e.g. Panoply, XyGrib, QtVlm,
+        etc...)? If so, was the behaviour as expected in the other viewer?
+
+  - type: textarea
+    id: grib
+    attributes:
+      label: GRIB file details
+      description: |
+        You can attach the grib file as follows:
+        1. Make sure you have permission to share the grib data publicly
+        2. If possible: extract a single timestep and parameter for which the error occurs
+        3. Turn the grib into a zip file
+        4. Make sure the size is less than 25 MB
+        5. Drag the file into the text box below
+        6. describe the GRIB file:
+        - Source (ECMWF, GFS, custom, etc.)
+        - Parameters (U/V wind, temp, etc.)
+        - Resolution
+        - File size
+      placeholder: |
+        weather.grb2.zip
+        GFS 0.25°, U/V wind, ~45MB
+        ...
+
+  - type: textarea
+    id: console
+    attributes:
+      label: Console / WASM errors
+      description: Paste browser console errors or panics (if any).
+      render: shell
+
+  - type: checkboxes
+    id: regression
+    attributes:
+      label: Regression?
+      options:
+        - label: This worked in a previous version
+
+  - type: input
+    id: regression-version
+    attributes:
+      label: last working version
+
+  - type: textarea
+    id: other-remarks
+    attributes:
+      label: Other Remarks
