@@ -85,7 +85,10 @@ class GribOverlayManager {
     this.clearVectorField();
 
     const vectorFieldSettings =
-      this.overlaySettingsManager.getVectorFieldSettings(parameterKey);
+      this.overlaySettingsManager.getVectorFieldSettings(
+        this.gribViewer,
+        parameterKey,
+      );
 
     // generate wind barb overlay
     let zoomLevel = this.map.getZoom();
@@ -185,8 +188,10 @@ class GribOverlayManager {
     let wasmOverlay;
     // let heatmapSettings;
 
-    const heatmapSettings =
-      this.overlaySettingsManager.getHeatmapSettings(parameterKey);
+    const heatmapSettings = this.overlaySettingsManager.getHeatmapSettings(
+      this.gribViewer,
+      parameterKey,
+    );
 
     if (parameterKey.isVectorField) {
       const u_key = parameterKey.firstComponent;
