@@ -1,6 +1,6 @@
 # Online-Grib-Viewer
 
-**Online-Grib-Viewer** is a tool for visualizing Grib2-files, right in your browser. It is hosted at [Gribviewer.com](https://Gribviewer.com).
+**Online-Grib-Viewer** is a tool for visualizing Grib2-files, right in your browser. It is hosted at [gribviewer.com](https://gribviewer.com).
 
 The website runs completely client side. All data processing is done inside your browser, and no data is sent to a server. No software needs to be installed, except for a browser.
 
