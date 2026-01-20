@@ -110,3 +110,9 @@ body:
       label: Regression?
       options:
         - label: This worked in a previous version
+
+  - type: input
+    id: regression version
+    attributes:
+      label: last working version
+      render: shell
