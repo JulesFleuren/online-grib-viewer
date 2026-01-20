@@ -81,12 +81,21 @@ body:
     attributes:
       label: GRIB file details
       description: |
-        If possible, describe the GRIB file:
+        You can attach the grib file as follows:
+        1. Make sure you have permission to share the grib data publicly
+        2. If possible: extract a single timestep and parameter for which the error occurs
+        3. Turn the grib into a zip file
+        4. Make sure the size is less than 25 MB
+        5. Drag the file into the text box below
+        6. describe the GRIB file:
         - Source (ECMWF, GFS, custom, etc.)
         - Parameters (U/V wind, temp, etc.)
         - Resolution
         - File size
-      placeholder: "GFS 0.25°, U/V wind, ~45MB"
+      placeholder: |
+        weather.grb2.zip
+        GFS 0.25°, U/V wind, ~45MB
+        ...
 
   - type: textarea
     id: console
