@@ -68,5 +68,5 @@ jobs:
         with:
           tag: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}
-          files: |
+          artifacts: |
             dist-${{ github.ref_name }}.zip
