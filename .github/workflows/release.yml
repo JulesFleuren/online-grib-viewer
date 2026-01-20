@@ -1,0 +1,72 @@
+name: Create GitHub Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          target: wasm32-unknown-unknown
+          override: true
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Cache cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust-wasm/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('rust-wasm/Cargo.lock') }}
+
+      - name: Run Rust tests
+        working-directory: rust-wasm
+        run: cargo test --workspace --release
+
+      - name: Build Rust wasm with wasm-pack
+        working-directory: rust-wasm
+        run: wasm-pack build --target web --release --out-dir ../pkg
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript type check
+        run: npx tsc --noEmit
+
+      - name: Build frontend with Vite
+        run: npm run build
+        env:
+          VITE_PROTOMAPS_API_KEY: ${{ secrets.PROTOMAPS_API_KEY }}
+
+      - name: Zip dist folder
+        run: |
+          VERSION=${{ github.ref_name }}
+          zip -r dist-${VERSION}.zip dist
+
+      - name: Create GitHub Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          files: |
+            dist-${{ github.ref_name }}.zip
