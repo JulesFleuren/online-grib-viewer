@@ -77,6 +77,14 @@ body:
       required: true
 
   - type: textarea
+    id: other-viewers
+    attributes:
+      label: Behavior in other viewers
+      description: |
+        Have you tried opening the grib file in another Grib-viewer (e.g. Panoply, XyGrib, QtVlm,
+        etc...)? If so, was the behaviour as expected in the other viewer?
+
+  - type: textarea
     id: grib
     attributes:
       label: GRIB file details
@@ -112,7 +120,11 @@ body:
         - label: This worked in a previous version
 
   - type: input
-    id: regression version
+    id: regression-version
     attributes:
       label: last working version
-      render: shell
+
+  - type: textarea
+    id: other-remarks
+    attributes:
+      label: Other Remarks
