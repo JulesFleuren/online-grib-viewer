@@ -71,3 +71,7 @@ and if the typescript typecheck passes:
 ```
 npm run typecheck
 ```
+
+## Tech stack
+
+The web app is written in Typescript, and Rust, compiled to WebAssembly. Reading the Grib file, and generating the heatmap and vector field overlays, is done in the Rust code. For this, it makes extensive use of the [grib-rs](https://docs.rs/crate/grib/latest) crate. Most other functionality is implemented in TypeScript. The slippy map makes use of [Leaflet](https://leafletjs.com/), and [Bulma CSS](https://bulma.io/) is used for the styling. [Vite](https://vite.dev/) is used to build and bundle the app.
