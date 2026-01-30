@@ -1,6 +1,6 @@
 import L from "leaflet";
 import "leaflet.fullscreen";
-import { leafletLayer } from "protomaps-leaflet";
+import { leafletLayer, type LeafletLayerOptions } from "protomaps-leaflet";
 import init from "../pkg/online_grib_viewer.js";
 import GribOverlayManager from "./overlays.js";
 import { GribKey } from "./gribKey.js";
@@ -13,6 +13,15 @@ import {
   loadDefaultSettings,
   OverlaySettingsManager,
 } from "./overlaySettings.js";
+
+const DEFAULT_BASEMAP_SETTINGS = {
+  // @ts-expect-error: some weird error about env not being a recognised property
+  url: `https://api.protomaps.com/tiles/v4/{z}/{x}/{y}.mvt?key=${import.meta.env.VITE_PROTOMAPS_API_KEY}`,
+  flavor: "light",
+  lang: "en",
+  maxDataZoom: 11,
+  maxZoom: 22,
+};
 
 let map: L.Map | null = null;
 let gribOverlayManager: GribOverlayManager | null = null;
@@ -29,6 +38,30 @@ async function loadPairs() {
       );
     }
     return response.json();
+  } catch (error) {
+    console.error("Error fetching or parsing JSON:", error);
+    throw error;
+  }
+}
+
+async function loadBasemapSettings() {
+  try {
+    const response = await fetch("/settings/basemapSettings.json");
+    if (!response.ok) {
+      // if the file doesn't exist, return the default settings
+      if (response.status == 404) {
+        return DEFAULT_BASEMAP_SETTINGS;
+      } else {
+        // if there is some other error, log it and return the defaut settings
+        console.warn(
+          `HTTP error fetching basemapSettings.json (status ${response.status}). Using default basemap instead. `,
+        );
+        return DEFAULT_BASEMAP_SETTINGS;
+      }
+    }
+    const basemapSettings = await response.json();
+    // return response, but replace with default attributes for attributes that are not present in response
+    return { ...DEFAULT_BASEMAP_SETTINGS, ...basemapSettings };
   } catch (error) {
     console.error("Error fetching or parsing JSON:", error);
     throw error;
@@ -525,15 +558,10 @@ init().then(() => {
     },
   }).setView([0, 0], 2);
 
-  const basemapUrl = "https://api.protomaps.com/tiles/v4/{z}/{x}/{y}.mvt";
-  const layer = leafletLayer({
-    // @ts-expect-error: some weird error about env not being a recognised property
-    url: basemapUrl + `?key=${import.meta.env.VITE_PROTOMAPS_API_KEY}`,
-    flavor: "light",
-    lang: "en",
-    maxDataZoom: 11,
+  loadBasemapSettings().then((settings) => {
+    console.log(settings as LeafletLayerOptions);
+    leafletLayer(settings as LeafletLayerOptions).addTo(map);
   });
-  layer.addTo(map);
 
   // ===== file input event listener =====
   const fileInput = document.getElementById("fileInput");
@@ -542,14 +570,15 @@ init().then(() => {
     throw new Error("Expected #fileInput to be an <input type='file'> element");
   }
 
-  fileInput.addEventListener("change", async () => {
+  fileInput.addEventListener("change", () => {
     const file = fileInput.files?.[0];
     if (!file) return;
 
-    await loadFile(file);
-    if (map && gribOverlayManager && gribOverlayManager.overlayBounds) {
-      map.fitBounds(gribOverlayManager.overlayBounds);
-    }
+    loadFile(file).then(() => {
+      if (map && gribOverlayManager && gribOverlayManager.overlayBounds) {
+        map.fitBounds(gribOverlayManager.overlayBounds);
+      }
+    });
   });
 
   // ===== parameter selection fields event listeners =====
