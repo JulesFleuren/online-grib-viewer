@@ -3,7 +3,8 @@
     "arrowType": "WindBarb",
     "scaleArrow": false,
     "colorMin": 0,
-    "colorMax": 35.0
+    "colorMax": 5.0,
+    "removeOutOfBounds": true
   },
   "vector:grib2_10_1_2,grib2_10_1_3": {
     "arrowType": "PivotCenter",

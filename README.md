@@ -136,11 +136,51 @@ Download the binary for your platform from [https://static-web-server.net/downlo
 
 ## Settings
 
-TODO
+Some settings can be changed trough the three config files in the `settings` folder. The files are in `json` format.
 
 ### Overlay Settings
 
-TODO
+These settings change the appearance of the vector field and heatmap overlays. The settings can be provided as a key-value pair, where the key is a string representing the parameter, and the value is an object specifying the settings for that parameter.
+
+<!--TODO: explain grib key strings-->
+
+#### Properties
+
+| Property            | Type                                            | Default      | Description                                                                                                                                            |
+| ------------------- | ----------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `colorMin`[^1]      | `number` \| `"FileBased"` \| `"MessageBased"`   | `FileBased`  | Minimum value for color scale. If `"FileBased"`, use the file's min. If `"MessageBased"`, use the message's min.                                       |
+| `colorMax`          | `number` \| `"FileBased"` \| `"MessageBased"`   | `FileBased`  | Maximum value for color scale. If `"FileBased"`, use the file's max. If `"MessageBased"`, use the message's max.                                       |
+| `removeOutOfBounds` | `boolean`                                       | `false`      | If `true`, values that fall outside of the interval [`colorMin`, `colorMax`] are transparent; if `false`, values are clamped to `colorMin`/`colorMax`. |
+| `pixelsPerPoint`    | `number`                                        | `3`          | Controls the resolution of the heatmap overlay.                                                                                                        |
+| `arrowType`         | `"PivotTip"` \| `"PivotCenter"` \| `"WindBarb"` | `"PivotTip"` | Arrow style for vector data.                                                                                                                           |
+| `scaleArrow`        | `boolean`                                       | `false`      | If `true`, scale arrow size by magnitude.                                                                                                              |
+| `scaleMax`          | `number` \| `"FileBased"` \| `"MessageBased"`   | `FileBased`  | Maximum value for arrow scaling. If `"FileBased"`, use the file's max. If `"MessageBased"`, use the message's max.                                     |
+
+[^1]: Applies to heatmaps.
+
+[^2]: Applies to vector fields
+
+**Note:**
+
+- Omitted properties will use default values.
+- `"FileBased"`: the maximum and/or minimum values are calculated from the file when a message for that parameter is first selected.
+
+#### Example
+
+```json
+{
+  "vector:grib2_0_2_2,grib2_0_2_3": {
+    "arrowType": "WindBarb",
+    "scaleArrow": false,
+    "colorMin": 0,
+    "colorMax": 35.0,
+    "removeOutOfBounds": false
+  },
+  ...
+}
+```
+
+Here we see an entry defining settings for the vector pair `vector:grib2_0_2_2,grib2_0_2_3` (which is wind data).
 
 ### Basemap Settings
 
