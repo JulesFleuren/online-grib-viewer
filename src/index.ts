@@ -1,6 +1,6 @@
 import L from "leaflet";
 import "leaflet.fullscreen";
-import { leafletLayer, type LeafletLayerOptions } from "protomaps-leaflet";
+import { leafletLayer } from "protomaps-leaflet";
 import init from "../pkg/online_grib_viewer.js";
 import GribOverlayManager from "./overlays.js";
 import { GribKey } from "./gribKey.js";
@@ -18,7 +18,7 @@ import {
  * BasemapSettings represents the configuration for the Protomaps basemap layer.
  * These settings are merged with defaults if not provided in the JSON configuration file.
  */
-interface BasemapSettings extends LeafletLayerOptions {
+interface BasemapSettings {
   url: string;
   flavor?: string;
   lang?: string;

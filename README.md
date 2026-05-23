@@ -2,7 +2,7 @@
 
 **Online-Grib-Viewer** is a tool for visualizing Grib2-files, right in your browser. It is hosted at [gribviewer.com](https://gribviewer.com).
 
-The website runs completely client side. All data processing is done inside your browser, and no data is sent to a server. No software needs to be installed, except for a browser.
+The website runs completely client side. All data processing is done inside your browser, and no data is sent to a server. No software needs to be installed, except for a browser. It can also be run offline, without an internet connection (see [Offline Grib Viewer](#offline-grib-viewer)).
 
 ## Capabilities
 
@@ -184,8 +184,57 @@ Here we see an entry defining settings for the vector pair `vector:grib2_0_2_2,g
 
 ### Basemap Settings
 
-TODO
+These settings control the appearance and behavior of the basemap layer. The basemap is loaded from either the Protomaps API or a local `.pmtiles` file. Settings can be customized by creating or modifying the `settings/basemapSettings.json` file.
+
+#### Properties
+
+| Property      | Type                    | Default      | Description                                                                                                                                         |
+| ------------- | ----------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `url`         | `string`                | (required)   | URL to the basemap tiles. Can be a Protomaps API endpoint or a path to a local `.pmtiles` file.                                                   |
+| `flavor`      | `string`                | `"light"`     | Map style. Common options include `"light"`, `"dark"`, `"grayscale"`, etc.                                                                      |
+| `lang`        | `string`                | `"en"`        | Language for map labels. Use ISO 639-1 language codes (e.g., `"en"`, `"nl"`, `"de"`).                                                          |
+| `maxDataZoom` | `number`                | `11`         | Maximum zoom level available in the tile data. Must match the zoom level of your `.pmtiles` file when using local basemaps.                      |
+| `maxZoom`     | `number`                | `22`         | Maximum zoom level the user can zoom to. Can exceed `maxDataZoom`; tiles will be upsampled if needed.                                            |
+| `bounds`      | `LatLngBoundsExpression` | Not set      | Geographic bounds of the basemap. Restricts the map area. Useful when using extracted `.pmtiles` files with limited coverage.                    |
+
+**Note:**
+
+- Omitted properties will use default values.
+- For offline use with a local `.pmtiles` file, ensure `maxDataZoom` matches the zoom level of your extracted file.
+- The `bounds` property is useful when you've extracted a regional `.pmtiles` file to avoid panning to areas with missing data.
+
+#### Examples
+
+**API-based basemap (online):**
+
+```json
+{
+  "url": "https://api.protomaps.com/tiles/v4/{z}/{x}/{y}.mvt?key=YOUR_API_KEY",
+  "flavor": "light",
+  "lang": "en",
+  "maxDataZoom": 11,
+  "maxZoom": 22
+}
+```
+
+**Local `.pmtiles` file (offline):**
+
+```json
+{
+  "url": "netherlands_z11.pmtiles",
+  "flavor": "light",
+  "lang": "nl",
+  "maxDataZoom": 11,
+  "maxZoom": 22,
+  "bounds": [
+    { "lat": 50.625073, "lng": 3.175049 },
+    { "lat": 53.644638, "lng": 7.459717 }
+  ]
+}
+```
+
+TODO: bounds are not always respected by protomaps, when they are specified like this
 
 ### Vector Pairs
 
-TODO
+The pairs of grib parameters that are considered vector pairs are specified in the `settings/vectorPairs.json`.
