@@ -148,17 +148,17 @@ These settings change the appearance of the vector field and heatmap overlays. T
 
 | Property            | Type                                            | Default      | Description                                                                                                                                            |
 | ------------------- | ----------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `colorMin`[^1]      | `number` \| `"FileBased"` \| `"MessageBased"`   | `FileBased`  | Minimum value for color scale. If `"FileBased"`, use the file's min. If `"MessageBased"`, use the message's min.                                       |
-| `colorMax`          | `number` \| `"FileBased"` \| `"MessageBased"`   | `FileBased`  | Maximum value for color scale. If `"FileBased"`, use the file's max. If `"MessageBased"`, use the message's max.                                       |
-| `removeOutOfBounds` | `boolean`                                       | `false`      | If `true`, values that fall outside of the interval [`colorMin`, `colorMax`] are transparent; if `false`, values are clamped to `colorMin`/`colorMax`. |
-| `pixelsPerPoint`    | `number`                                        | `3`          | Controls the resolution of the heatmap overlay.                                                                                                        |
-| `arrowType`         | `"PivotTip"` \| `"PivotCenter"` \| `"WindBarb"` | `"PivotTip"` | Arrow style for vector data.                                                                                                                           |
-| `scaleArrow`        | `boolean`                                       | `false`      | If `true`, scale arrow size by magnitude.                                                                                                              |
-| `scaleMax`          | `number` \| `"FileBased"` \| `"MessageBased"`   | `FileBased`  | Maximum value for arrow scaling. If `"FileBased"`, use the file's max. If `"MessageBased"`, use the message's max.                                     |
+| `colorMin` *        | `number` \| `"FileBased"` \| `"MessageBased"`   | `FileBased`  | Minimum value for color scale. If `"FileBased"`, use the file's min. If `"MessageBased"`, use the message's min.                                       |
+| `colorMax` *        | `number` \| `"FileBased"` \| `"MessageBased"`   | `FileBased`  | Maximum value for color scale. If `"FileBased"`, use the file's max. If `"MessageBased"`, use the message's max.                                       |
+| `removeOutOfBounds` * | `boolean`                                       | `false`      | If `true`, values that fall outside of the interval [`colorMin`, `colorMax`] are transparent; if `false`, values are clamped to `colorMin`/`colorMax`. |
+| `pixelsPerPoint` *    | `number`                                        | `3`          | Controls the resolution of the heatmap overlay.                                                                                                        |
+| `arrowType` **        | `"PivotTip"` \| `"PivotCenter"` \| `"WindBarb"` | `"PivotTip"` | Arrow style for vector data.                                                                                                                           |
+| `scaleArrow` **       | `boolean`                                       | `false`      | If `true`, scale arrow size by magnitude.                                                                                                              |
+| `scaleMax` **         | `number` \| `"FileBased"` \| `"MessageBased"`   | `FileBased`  | Maximum value for arrow scaling. If `"FileBased"`, use the file's max. If `"MessageBased"`, use the message's max.                                     |
 
-[^1]: Applies to heatmaps.
+\* Applies to heatmaps only.
 
-[^2]: Applies to vector fields
+\*\* Applies to vector fields only.
 
 **Note:**
 
