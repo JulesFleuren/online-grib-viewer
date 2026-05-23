@@ -1,6 +1,7 @@
 use grib::codetables::{CodeTable4_5, Lookup};
 use grib::{
-    FixedSurface, Grib2, Grib2Read, GridDefinitionTemplateValues, MessageIndex, SubMessage,
+    FixedSurface, Grib2, Grib2Read, GridDefinitionTemplateValues, GridPointIndex, LatLons,
+    MessageIndex, SubMessage,
 };
 
 use log::warn;
@@ -210,6 +211,19 @@ pub(crate) fn get_lat_lon_1d_without_jump(
             // TODO: extracting the 1d lats and lons is convoluted, but there doesn't seem to be an easy way to do it.
             // The RegularGridIterator has the two arrays we are looking for as fields, but they are private. Perhaps
             // open an issue on grib-rs?
+            let latlons = grid.lat_lon.latlons()?;
+            let (lat_2d, lon_2d): (Vec<f32>, Vec<f32>) = latlons.unzip();
+            for (idx, (i, j)) in grid.lat_lon.ij()?.enumerate() {
+                if i == 0 {
+                    lat[j] = lat_2d[idx];
+                }
+                if j == 0 {
+                    lon[i] = lon_2d[idx];
+                }
+            }
+        }
+        GridDefinitionTemplateValues::Template1(grid) => {
+            // Rotated lat/lon grid - similar to Template0
             let latlons = grid.latlons()?;
             let (lat_2d, lon_2d): (Vec<f32>, Vec<f32>) = latlons.unzip();
             for (idx, (i, j)) in grid.ij()?.enumerate() {
@@ -233,9 +247,9 @@ pub(crate) fn get_lat_lon_1d_without_jump(
             ));
         }
         GridDefinitionTemplateValues::Template40(grid) => {
-            let latlons = grid.latlons()?;
+            let latlons = grid.gaussian.latlons()?;
             let (lat_2d, lon_2d): (Vec<f32>, Vec<f32>) = latlons.unzip();
-            for (i, j) in grid.ij()? {
+            for (i, j) in grid.gaussian.ij()? {
                 if i == 0 {
                     lat[j] = lat_2d[j];
                 }

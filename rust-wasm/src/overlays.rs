@@ -1,5 +1,5 @@
 use colorgrad::Gradient;
-use grib::GridDefinitionTemplateValues;
+use grib::{GridDefinitionTemplateValues, GridPointIndex};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::f32;
@@ -385,22 +385,41 @@ fn first_bigger_than(sorted_vec: &[f32], target: f32) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use grib::GridDefinitionTemplateValues;
+    use grib::{GridDefinitionTemplateValues, GridPointIndex};
+    use grib::def::grib2::template::{Template3_0, param_set};
 
     use crate::overlays::{first_bigger_than, get_index_map, get_lat_lon_1d_without_jump};
 
     #[test]
     fn test_get_lat_lon_1d() {
-        let def = grib::LatLonGridDefinition {
-            ni: 2,
-            nj: 3,
-            first_point_lat: 0,
-            first_point_lon: 0,
-            last_point_lat: 2_000_000,
-            last_point_lon: 1_000_000,
-            scanning_mode: grib::ScanningMode(0b01000000),
+        let template3_0 = Template3_0 {
+            earth: param_set::EarthShape {
+                shape: 6,
+                spherical_earth_radius_scale_factor: 0xff,
+                spherical_earth_radius_scaled_value: 0xffffffff,
+                major_axis_scale_factor: 0xff,
+                major_axis_scaled_value: 0xffffffff,
+                minor_axis_scale_factor: 0xff,
+                minor_axis_scaled_value: 0xffffffff,
+            },
+            lat_lon: param_set::LatLonGrid {
+                grid: param_set::Grid {
+                    ni: 2,
+                    nj: 3,
+                    initial_production_domain_basic_angle: 0,
+                    basic_angle_subdivisions: 0xffffffff,
+                    first_point_lat: 0,
+                    first_point_lon: 0,
+                    resolution_and_component_flags: param_set::ResolutionAndComponentFlags(0),
+                    last_point_lat: 2_000_000,
+                    last_point_lon: 1_000_000,
+                },
+                i_direction_inc: 500_000,
+                j_direction_inc: 1_000_000,
+                scanning_mode: param_set::ScanningMode(0b01000000),
+            },
         };
-        let grid = GridDefinitionTemplateValues::Template0(def);
+        let grid = GridDefinitionTemplateValues::Template0(template3_0);
         let (lat_1d, lon_1d) = get_lat_lon_1d_without_jump(&grid).expect("get_lat_lon_1d failed");
         assert_eq!(lat_1d, vec![0.0, 1.0, 2.0]);
         assert_eq!(lon_1d, vec![0.0, 1.0]);
@@ -408,16 +427,34 @@ mod tests {
 
     #[test]
     fn test_index_map() {
-        let def = grib::LatLonGridDefinition {
-            ni: 2,
-            nj: 3,
-            first_point_lat: 0,
-            first_point_lon: 0,
-            last_point_lat: 2_000_000,
-            last_point_lon: 1_000_000,
-            scanning_mode: grib::ScanningMode(0b01110000),
+        let template3_0 = Template3_0 {
+            earth: param_set::EarthShape {
+                shape: 6,
+                spherical_earth_radius_scale_factor: 0xff,
+                spherical_earth_radius_scaled_value: 0xffffffff,
+                major_axis_scale_factor: 0xff,
+                major_axis_scaled_value: 0xffffffff,
+                minor_axis_scale_factor: 0xff,
+                minor_axis_scaled_value: 0xffffffff,
+            },
+            lat_lon: param_set::LatLonGrid {
+                grid: param_set::Grid {
+                    ni: 2,
+                    nj: 3,
+                    initial_production_domain_basic_angle: 0,
+                    basic_angle_subdivisions: 0xffffffff,
+                    first_point_lat: 0,
+                    first_point_lon: 0,
+                    resolution_and_component_flags: param_set::ResolutionAndComponentFlags(0),
+                    last_point_lat: 2_000_000,
+                    last_point_lon: 1_000_000,
+                },
+                i_direction_inc: 500_000,
+                j_direction_inc: 1_000_000,
+                scanning_mode: param_set::ScanningMode(0b01110000),
+            },
         };
-        let grid = GridDefinitionTemplateValues::Template0(def);
+        let grid = GridDefinitionTemplateValues::Template0(template3_0);
 
         let ij = grid.ij().expect("ij failed");
         let map = get_index_map(&grid).expect("get_index_map failed");

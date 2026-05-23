@@ -1,6 +1,7 @@
 use grib::GribError;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
+use std::io;
 use wasm_bindgen::prelude::*;
 
 #[derive(Debug)]
@@ -20,6 +21,12 @@ impl Error for GribViewerError {
 impl From<GribError> for GribViewerError {
     fn from(err: GribError) -> Self {
         GribViewerError::Grib(err)
+    }
+}
+
+impl From<io::Error> for GribViewerError {
+    fn from(err: io::Error) -> Self {
+        GribViewerError::Other(err.to_string())
     }
 }
 
