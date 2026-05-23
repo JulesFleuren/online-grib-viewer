@@ -1,5 +1,5 @@
 use colorgrad::Gradient;
-use grib::GridDefinitionTemplateValues;
+use grib::{GridDefinitionTemplateValues, GridPointIndex};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::f32;

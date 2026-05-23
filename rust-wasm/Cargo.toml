@@ -14,7 +14,7 @@ crate-type = ["cdylib"]
 wasm-bindgen = "0.2"
 console_log = "1.0.0"
 js-sys = "0.3"
-grib = { version = "0.13", default-features = false, features = ["time-calculation"] }
+grib = { version = "0.15", default-features = false, features = ["time-calculation"] }
 console_error_panic_hook = "0.1.7"
 quick-xml = "0.38.3"
 log = "0.4.28"
