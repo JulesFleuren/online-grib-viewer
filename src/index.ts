@@ -14,8 +14,21 @@ import {
   OverlaySettingsManager,
 } from "./overlaySettings.js";
 
-const DEFAULT_BASEMAP_SETTINGS = {
-  // @ts-expect-error: some weird error about env not being a recognised property
+/**
+ * BasemapSettings represents the configuration for the Protomaps basemap layer.
+ * These settings are merged with defaults if not provided in the JSON configuration file.
+ */
+interface BasemapSettings extends LeafletLayerOptions {
+  url: string;
+  flavor?: string;
+  lang?: string;
+  maxDataZoom?: number;
+  maxZoom?: number;
+  bounds?: L.LatLngBoundsExpression;
+}
+
+const DEFAULT_BASEMAP_SETTINGS: BasemapSettings = {
+  // @ts-expect-error: Vite's import.meta.env is dynamically injected at build time
   url: `https://api.protomaps.com/tiles/v4/{z}/{x}/{y}.mvt?key=${import.meta.env.VITE_PROTOMAPS_API_KEY}`,
   flavor: "light",
   lang: "en",
@@ -44,7 +57,7 @@ async function loadPairs() {
   }
 }
 
-async function loadBasemapSettings() {
+async function loadBasemapSettings(): Promise<BasemapSettings> {
   try {
     const response = await fetch("/settings/basemapSettings.json");
     if (!response.ok) {
@@ -559,8 +572,7 @@ init().then(() => {
   }).setView([0, 0], 2);
 
   loadBasemapSettings().then((settings) => {
-    console.log(settings as LeafletLayerOptions);
-    leafletLayer(settings as LeafletLayerOptions).addTo(map);
+    leafletLayer(settings).addTo(map);
   });
 
   // ===== file input event listener =====
