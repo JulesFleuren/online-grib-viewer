@@ -56,7 +56,7 @@ npm run dev
 
 Each time the rust code is changed, `npm run wasm` has to be run. The typescript code will automatically be updated when the file is saved.
 
-To load the Protomaps basemap, a Protomaps api-key is needed. You can get one by signing up on the [Protomaps website](https://protomaps.com/api). Copy the `.env.example` file at the root of this repo, rename it to `.env`, and replace the dummy key with your own key. The basemap should now work. (I am planning to also support an offline basemap in the form of a `.pmtiles` file, but this is not yet implemented.)
+To load the Protomaps basemap, a Protomaps api-key is needed. You can get one by signing up on the [Protomaps website](https://protomaps.com/api). Copy the `.env.example` file at the root of this repo, rename it to `.env`, and replace the dummy key with your own key. The basemap should now work. Using an offline basemap (see [Offline Grib Viewer](#offline-grib-viewer)) is also possible. For development, place it in `/public` and modify `/public/settings`.
 
 ### Testing
 
