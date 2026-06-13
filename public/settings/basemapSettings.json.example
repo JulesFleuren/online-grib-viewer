@@ -1,0 +1,7 @@
+{
+  "url": "planet.pmtiles",
+  "flavor": "light",
+  "lang": "nl",
+  "maxDataZoom": 10,
+  "maxZoom": 22
+}

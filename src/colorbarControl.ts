@@ -26,14 +26,6 @@ class ColorbarControl extends L.Control {
   onAdd(_map: L.Map): HTMLElement {
     let div = L.DomUtil.create("div", "colorbar-control") as HTMLDivElement;
 
-    // div.innerHTML = "TESTTEST";
-
-    // const img = L.DomUtil.create("img", "", div) as HTMLImageElement;
-    // img.src = this.colorbarImageUrl;
-    // img.alt = "Colorbar";
-    // img.style.width = "100%"; // optional
-    // img.style.height = "10px"; // optional
-    // return div;
 
     // Container for image + ticks
     const container = L.DomUtil.create("div", "colorbar-container", div);
